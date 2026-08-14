@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+* {
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+.pt-safe { padding-top: env(safe-area-inset-top, 16px); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pt-safe-or-4 { padding-top: max(env(safe-area-inset-top, 0px), 16px); }
+.pb-safe-or-4 { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
+.pb-safe-or-6 { padding-bottom: max(env(safe-area-inset-bottom, 0px), 24px); }
