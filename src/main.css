@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 * {
-  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
+  corner-shape: var(--shape, round);
 }
 
 html, body, #root {
@@ -13,9 +13,165 @@ html, body, #root {
 
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 .pt-safe { padding-top: env(safe-area-inset-top, 16px); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .pt-safe-or-4 { padding-top: max(env(safe-area-inset-top, 0px), 16px); }
 .pb-safe-or-4 { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
 .pb-safe-or-6 { padding-bottom: max(env(safe-area-inset-bottom, 0px), 24px); }
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-font-sans: var(--font-sans);
+  --font-font-heading: var(--font-heading);
+  --font-font-serif: var(--font-serif);
+  --font-font-mono: var(--font-mono);
+}
+
+@theme {
+  --radius-xs: calc(var(--radius) - 8px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
+  --radius-4xl: calc(var(--radius) + 24px);
+}
+
+.rounded-full, .rounded-none,
+.rounded-t-full, .rounded-t-none,
+.rounded-r-full, .rounded-r-none,
+.rounded-b-full, .rounded-b-none,
+.rounded-l-full, .rounded-l-none,
+.rounded-s-full, .rounded-s-none,
+.rounded-e-full, .rounded-e-none,
+.rounded-tl-full, .rounded-tl-none,
+.rounded-tr-full, .rounded-tr-none,
+.rounded-bl-full, .rounded-bl-none,
+.rounded-br-full, .rounded-br-none,
+.rounded-ss-full, .rounded-ss-none,
+.rounded-se-full, .rounded-se-none,
+.rounded-es-full, .rounded-es-none,
+.rounded-ee-full, .rounded-ee-none {
+  corner-shape: round;
+}
+
+@utility rounded-* {
+  border-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-t-* {
+  border-top-left-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+  border-top-right-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-r-* {
+  border-top-right-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+  border-bottom-right-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-b-* {
+  border-bottom-right-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+  border-bottom-left-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-l-* {
+  border-top-left-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+  border-bottom-left-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-tl-* {
+  border-top-left-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-tr-* {
+  border-top-right-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-bl-* {
+  border-bottom-left-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-br-* {
+  border-bottom-right-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-s-* {
+  border-start-start-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+  border-end-start-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-e-* {
+  border-start-end-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+  border-end-end-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-ss-* {
+  border-start-start-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-se-* {
+  border-start-end-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-es-* {
+  border-end-start-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+@utility rounded-ee-* {
+  border-end-end-radius: calc(--value(--radius-*, [length], [percentage]) * var(--shape-multiplier, 1));
+}
+
+:root {
+  --shape: squircle;
+  --shape-multiplier: 1;
+
+  --background: #fafafa;
+  --foreground: #111111;
+  --primary: #ff453a;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f7;
+  --secondary-foreground: #1c1c1e;
+  --muted: #f2f2f7;
+  --muted-foreground: #8e8e93;
+  --accent: #eef2ff;
+  --accent-foreground: #4338ca;
+  --destructive: #ff3b30;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --border: #e5e5ea;
+  --input: #f2f2f7;
+  --ring: #ff453a;
+  --chart-1: #ff453a;
+  --chart-2: #0a84ff;
+  --chart-3: #ffd60a;
+  --chart-4: #32ade6;
+  --chart-5: #af52de;
+
+  --font-sans: "Inter";
+  --font-heading: "Outfit";
+  --font-serif: "Playfair Display";
+  --font-mono: "JetBrains Mono";
+
+  --radius: 1rem;
+}
+
+@supports (corner-shape: squircle) {
+  :root {
+    --shape-multiplier: 2.5;
+  }
+}

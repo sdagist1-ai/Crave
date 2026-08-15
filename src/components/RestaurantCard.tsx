@@ -1,7 +1,6 @@
-import { Utensils, Star, Check } from "lucide-react";
-import { C } from "../constants/theme";
+import { Icon } from "@iconify/react";
 import { Restaurant } from "../types";
-import { formatPriceLevel, getVibeColor, formatPrimaryType } from "../utils/helpers";
+import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
 
 export function RestaurantCard({
   restaurant, onDetail,
@@ -9,60 +8,68 @@ export function RestaurantCard({
   restaurant: Restaurant; onDetail: (r: Restaurant) => void;
 }) {
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-shadow hover:shadow-md">
-      <button type="button" onClick={() => onDetail(restaurant)}
-        className="w-full text-left p-4 flex gap-4 active:bg-slate-50/50 transition-colors">
-        <div className="relative flex-shrink-0">
-          {restaurant.photoUrl ? (
-            <img src={restaurant.photoUrl} alt={restaurant.name} className="w-20 h-20 rounded-2xl object-cover" />
-          ) : (
-            <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center"><Utensils size={24} className="text-slate-300" /></div>
-          )}
-          {restaurant.userScore ? (
-            <div className="absolute top-1 right-1 bg-white/90 backdrop-blur-sm rounded-lg px-1.5 py-0.5 text-[10px] font-black flex items-center gap-0.5 shadow-sm"
-              style={{ color: restaurant.userScore <= 3 ? C.rose : restaurant.userScore <= 5 ? "#F97316" : restaurant.userScore <= 7 ? C.amber : C.emerald }}>
-              {restaurant.userScore}<span className="text-slate-400 font-bold">/10</span>
-            </div>
-          ) : restaurant.rating ? (
-            <div className="absolute top-1 right-1 bg-white/90 backdrop-blur-sm rounded-lg px-1.5 py-0.5 text-[10px] font-black text-slate-700 flex items-center gap-0.5 shadow-sm">
-              <Star size={10} fill={C.amber} stroke={C.amber} />
-              {restaurant.rating}
-            </div>
+    <div 
+      onClick={() => onDetail(restaurant)}
+      className="bg-card rounded-[1.5rem] p-3 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-border/50 flex gap-4 active:scale-[0.98] transition-transform cursor-pointer"
+    >
+      <div className="relative shrink-0">
+        {restaurant.photoUrl ? (
+          <img
+            src={restaurant.photoUrl}
+            alt={restaurant.name}
+            className="w-[100px] h-[100px] rounded-2xl object-cover shadow-sm bg-secondary"
+          />
+        ) : (
+          <div className="w-[100px] h-[100px] rounded-2xl bg-secondary flex items-center justify-center">
+            <Icon icon="solar:chef-hat-linear" className="text-muted-foreground size-8" />
+          </div>
+        )}
+        
+        {restaurant.userScore ? (
+          <div className="absolute top-1.5 right-1.5 bg-background/90 backdrop-blur-sm px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+            <span className="text-xs font-bold text-foreground">{restaurant.userScore}</span>
+            <span className="text-[10px] font-medium text-muted-foreground">/10</span>
+          </div>
+        ) : restaurant.rating ? (
+          <div className="absolute top-1.5 right-1.5 bg-background/90 backdrop-blur-sm px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
+            <Icon icon="solar:star-bold" className="text-orange-400" width={12} height={12} />
+            <span className="text-xs font-bold text-foreground">{restaurant.rating}</span>
+          </div>
+        ) : null}
+
+        {restaurant.visited && (
+          <div className="absolute -bottom-2 -right-2 bg-green-500 text-white rounded-full p-1 border-2 border-card shadow-sm flex items-center justify-center">
+            <Icon icon="solar:check-read-linear" width={14} height={14} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 py-1 flex flex-col justify-center overflow-hidden">
+        <h3 className="font-heading font-bold text-base leading-tight mb-0.5 truncate">
+          {restaurant.name}
+        </h3>
+        <p className="text-[11px] text-muted-foreground font-medium mb-2.5 truncate">
+          {restaurant.primaryType ? `${formatPrimaryType(restaurant.primaryType)} • ` : ''}
+          {restaurant.address}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {(!restaurant.visited && restaurant.userScore) ? (
+            <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold tracking-wide uppercase flex items-center gap-1 border border-emerald-100">
+              <Icon icon="solar:check-read-linear" width={10} height={10} /> You've been here
+            </span>
           ) : null}
-          {restaurant.visited && (
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow-sm"
-              style={{ background: C.emerald, border: `2px solid ${C.white}` }}>
-              <Check size={12} className="text-white" />
-            </div>
+          {restaurant.vibes.map((vibe) => (
+            <span key={vibe} className="px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-[10px] font-bold tracking-wide uppercase">
+              {vibe}
+            </span>
+          ))}
+          {restaurant.priceLevel && (
+            <span className="px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold tracking-wide">
+              {formatPriceLevel(restaurant.priceLevel)}
+            </span>
           )}
         </div>
-        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-          <div>
-            <h3 className="font-bold text-lg text-slate-800 leading-tight">{restaurant.name}</h3>
-            <p className="text-xs text-slate-400 truncate mt-1">
-              {restaurant.primaryType && <span className="text-slate-500 font-bold mr-1.5">{formatPrimaryType(restaurant.primaryType)} &bull;</span>}
-              {restaurant.address}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {!restaurant.visited && restaurant.userScore && (
-              <span className="text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center gap-1">
-                <Check size={10} strokeWidth={3} /> You've been here
-              </span>
-            )}
-            {restaurant.vibes.map((vibe) => {
-              const color = getVibeColor(vibe);
-              return (
-                <span key={vibe} className="text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider"
-                  style={{ background: `${color}18`, color }}>{vibe}</span>
-              );
-            })}
-            {restaurant.priceLevel && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-500">{formatPriceLevel(restaurant.priceLevel)}</span>
-            )}
-          </div>
-        </div>
-      </button>
+      </div>
     </div>
   );
 }

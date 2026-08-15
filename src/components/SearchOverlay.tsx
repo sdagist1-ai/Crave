@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, X, Star, Plus } from "lucide-react";
+import { Icon } from "@iconify/react";
 import { supabase } from "../lib/supabase";
 import { searchPlaces, type PlaceResult } from "../lib/places";
 import { useDebounce } from "../hooks/useDebounce";
-import { C, VIBE_OPTIONS } from "../constants/theme";
+import { VIBE_OPTIONS } from "../constants/theme";
 import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
 import { Restaurant, Group } from "../types";
 
@@ -144,23 +144,32 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
 
   if (!selectedPlace) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col bg-white">
-        <div className="pt-safe-or-4 px-4 pb-3 border-b border-slate-100">
+      <div className="fixed inset-0 z-50 flex flex-col bg-background font-sans text-foreground">
+        <div className="pt-safe-or-4 px-4 pb-3 border-b border-border/50">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={onClose} className="p-1.5 text-slate-400"><X size={22} /></button>
-            <div className="flex-1 flex items-center gap-2.5 bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200">
-              <Search size={18} className="text-slate-400 flex-shrink-0" />
+            <button type="button" onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+              <Icon icon="solar:close-circle-linear" className="size-6" />
+            </button>
+            <div className="relative flex-1">
+              <Icon
+                icon="solar:magnifer-linear"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground size-5"
+              />
               <input ref={inputRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search for a restaurant..."
-                className="flex-1 bg-transparent text-slate-800 text-base placeholder:text-slate-400 outline-none font-medium" />
-              {query && <button type="button" onClick={() => setQuery("")} className="text-slate-400"><X size={16} /></button>}
+                className="w-full bg-secondary border border-transparent rounded-full pl-11 pr-10 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground outline-none transition-colors" />
+              {query && (
+                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <Icon icon="solar:close-circle-bold" className="size-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {searchQuery.isLoading && debouncedQuery.length >= 2 && (
             <div className="flex items-center justify-center p-12">
-              <div className="animate-spin w-6 h-6 border-2 border-rose-500 border-t-transparent rounded-full" />
+              <Icon icon="solar:spinner-broken-linear" className="animate-spin text-primary size-8" />
             </div>
           )}
           {searchQuery.data?.map((place: PlaceResult) => {
@@ -177,31 +186,31 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
                   setSelectedPlace(place);
                 }
               }}
-                className={`w-full text-left px-4 py-4 border-b border-slate-50 transition-colors flex items-start gap-3.5 ${isAlreadyHere ? 'opacity-60 cursor-not-allowed' : 'active:bg-slate-50'} ${(saving && !isAlreadyHere) ? 'opacity-50 pointer-events-none' : ''}`}>
+                className={`w-full text-left px-4 py-4 border-b border-border/50 transition-colors flex items-start gap-3.5 ${isAlreadyHere ? 'opacity-60 cursor-not-allowed' : 'active:bg-secondary'} ${(saving && !isAlreadyHere) ? 'opacity-50 pointer-events-none' : ''}`}>
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner" style={{ background: generateGradientFromName(place.name), color: "#ffffff" }}>
                   <span className="font-black text-xl tracking-tight drop-shadow-sm opacity-90">{place.name.charAt(0).toUpperCase()}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-800 text-base">{place.name}</div>
+                  <div className="font-bold text-base">{place.name}</div>
 
                   {savedGroupNames.length > 0 && (
                     <div className="mt-1">
-                      <span className="inline-block text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-md" style={{ background: C.roseLight, color: C.rose }}>
+                      <span className="inline-block text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md bg-primary/10 text-primary">
                         {isAlreadyHere ? "Already in this Cravelist" : `Saved in: ${savedGroupNames.join(", ")}`}
                       </span>
                     </div>
                   )}
 
-                  <div className="text-sm text-slate-400 mt-0.5 truncate">{place.address}</div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                  <div className="text-sm text-muted-foreground mt-0.5 truncate">{place.address}</div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                     {place.rating && (
-                      <span className="flex items-center gap-0.5 font-bold text-slate-700">
-                        <Star size={12} fill={C.amber} stroke={C.amber} /> {place.rating}
+                      <span className="flex items-center gap-0.5 font-bold text-foreground">
+                        <Icon icon="solar:star-bold" className="text-amber-500 size-3" /> {place.rating}
                       </span>
                     )}
                     {place.priceLevel && <span className="font-semibold">{formatPriceLevel(place.priceLevel)}</span>}
                     {place.openNow !== undefined && (
-                      <span className="font-semibold" style={{ color: place.openNow ? C.emerald : C.slate400 }}>
+                      <span className="font-semibold" style={{ color: place.openNow ? "#10b981" : "inherit" }}>
                         {place.openNow ? "Open" : "Closed"}
                       </span>
                     )}
@@ -211,11 +220,11 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
             );
           })}
           {debouncedQuery.length >= 2 && !searchQuery.isLoading && searchQuery.data?.length === 0 && (
-            <div className="text-center text-slate-400 p-12 text-sm">No restaurants found</div>
+            <div className="text-center text-muted-foreground p-12 text-sm font-medium">No restaurants found</div>
           )}
           {debouncedQuery.length < 2 && (
-            <div className="flex flex-col items-center justify-center p-16 text-slate-400">
-              <Search size={40} strokeWidth={1} className="mb-4 opacity-30" />
+            <div className="flex flex-col items-center justify-center p-16 text-muted-foreground/50">
+              <Icon icon="solar:magnifer-linear" className="size-10 mb-4" />
               <p className="text-sm font-medium">Search by name, cuisine, or location</p>
             </div>
           )}
@@ -225,43 +234,45 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="pt-safe-or-4 px-4 pb-3 border-b border-slate-100">
+    <div className="fixed inset-0 z-50 flex flex-col bg-background font-sans text-foreground">
+      <div className="pt-safe-or-4 px-4 pb-3 border-b border-border/50">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setSelectedPlace(null)} className="p-1.5 text-slate-400"><X size={22} /></button>
-          <span className="font-bold text-slate-800 text-base">Add to your list</span>
+          <button type="button" onClick={() => setSelectedPlace(null)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
+            <Icon icon="solar:alt-arrow-left-linear" className="size-6" />
+          </button>
+          <span className="font-bold text-base">Add to your list</span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto bg-white">
-        <div className="p-6 pt-8 space-y-7">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 pt-8 space-y-8">
           <div className="pr-2">
-            <h2 className="text-[28px] font-black text-slate-800 leading-tight tracking-tight">{selectedPlace.name}</h2>
-            <p className="text-sm text-slate-500 mt-2.5 font-medium leading-relaxed">
-              {selectedPlace.primaryType && <span className="text-slate-700 font-bold mr-1.5 uppercase tracking-wide text-[11px] bg-slate-100 px-2 py-1 rounded-md">{formatPrimaryType(selectedPlace.primaryType)}</span>}
+            <h2 className="font-heading text-3xl font-black leading-tight tracking-tight mb-2">{selectedPlace.name}</h2>
+            <p className="text-sm text-muted-foreground font-medium leading-relaxed">
+              {selectedPlace.primaryType && <span className="text-foreground font-bold mr-1.5 uppercase tracking-wide text-[11px] bg-secondary px-2 py-1 rounded-md">{formatPrimaryType(selectedPlace.primaryType)}</span>}
               {selectedPlace.address}
             </p>
           </div>
 
-          <div className="flex items-center gap-3 text-sm text-slate-500 mb-2">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground mb-2">
             {selectedPlace.rating && (
-              <span className="flex items-center gap-1 font-bold text-slate-800 bg-amber-50 px-2.5 py-1 rounded-lg">
-                <Star size={14} fill={C.amber} stroke={C.amber} /> {selectedPlace.rating}
+              <span className="flex items-center gap-1 font-bold text-foreground bg-amber-500/10 px-2.5 py-1 rounded-lg">
+                <Icon icon="solar:star-bold" className="text-amber-500 size-4" /> {selectedPlace.rating}
               </span>
             )}
-            {selectedPlace.priceLevel && <span className="font-bold">{formatPriceLevel(selectedPlace.priceLevel)}</span>}
+            {selectedPlace.priceLevel && <span className="font-bold text-foreground">{formatPriceLevel(selectedPlace.priceLevel)}</span>}
           </div>
 
           <div>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Assign Vibes</label>
+            <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3">Assign Vibes</label>
             <div className="flex flex-wrap gap-2">
               {VIBE_OPTIONS.map((vibe) => {
                 const isSelected = selectedVibes.includes(vibe.label);
                 return (
                   <button key={vibe.label} type="button" onClick={() => toggleVibe(vibe.label)}
-                    className="px-4 py-2.5 rounded-xl text-sm font-bold transition-all border-2"
+                    className="px-4 py-2 rounded-full text-xs font-bold transition-all border-2 active:scale-95"
                     style={isSelected
-                      ? { background: vibe.color, color: "#fff", borderColor: vibe.color, boxShadow: `0 4px 12px ${vibe.color}30` }
-                      : { background: C.slate50, color: C.slate600, borderColor: C.slate200 }}>
+                      ? { background: vibe.color, color: "#fff", borderColor: vibe.color }
+                      : { background: "transparent", color: vibe.color, borderColor: "var(--color-border)" }}>
                     {vibe.label}
                   </button>
                 );
@@ -270,23 +281,23 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
           </div>
 
           <div>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Personal Notes</label>
+            <label className="block text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3">Personal Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
               placeholder="Why do you want to go here?"
               rows={3}
-              className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 text-slate-700 text-sm placeholder:text-slate-400 resize-none outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all" />
+              className="w-full bg-secondary border border-transparent rounded-2xl p-4 text-sm placeholder:text-muted-foreground resize-none outline-none focus:border-primary/50 transition-all" />
           </div>
         </div>
       </div>
-      <div className="px-5 pb-safe-or-4 pt-3 border-t border-slate-100">
+      <div className="px-5 pb-safe-or-4 pt-3 border-t border-border/50 bg-background/90 backdrop-blur-sm">
         <button type="button" onClick={() => handleSave(selectedPlace)}
           disabled={saving || selectedVibes.length === 0}
-          className="w-full py-4 rounded-2xl font-bold text-white text-sm disabled:opacity-40 transition-all shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
-          style={{ background: C.rose }}>
-          <Plus size={18} />
+          className="w-full py-4 rounded-full font-bold text-primary-foreground text-sm disabled:opacity-40 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95"
+          style={{ background: "var(--color-primary)" }}>
+          {saving ? <Icon icon="solar:spinner-broken-linear" className="animate-spin size-5" /> : <Icon icon="solar:add-circle-bold" className="size-5" />}
           {saving ? "Saving..." : "Save to My List"}
         </button>
-        {selectedVibes.length === 0 && <p className="text-xs text-slate-400 text-center mt-2">Pick at least one vibe</p>}
+        {selectedVibes.length === 0 && <p className="text-[11px] text-muted-foreground font-medium text-center mt-2">Pick at least one vibe</p>}
       </div>
     </div>
   );

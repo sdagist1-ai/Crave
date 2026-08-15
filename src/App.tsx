@@ -113,7 +113,7 @@ export async function fetchRestaurants({
 
   const [membersRes, globalReviewsRes] = await Promise.all([
     groupId ? supabase.from("group_members").select("user_id").eq("group_id", groupId) : Promise.resolve({ data: [] }),
-    supabase.from("reviews").select("*").in("place_id", placeIds)
+    placeIds.length > 0 ? supabase.from("reviews").select("*").in("place_id", placeIds) : Promise.resolve({ data: [], error: null })
   ]);
 
   const activeGroupMembers = membersRes.data ? membersRes.data.map(m => m.user_id) : [];
@@ -124,7 +124,12 @@ export async function fetchRestaurants({
   const uniqueUids = new Set(allGlobalReviews.map((r: any) => r.user_id));
   data.forEach((r: any) => { if (r.owner) uniqueUids.add(r.owner); });
   
-  const { data: profilesData } = await supabase.from("profiles").select("id, first_name, last_name, avatar_url").in("id", Array.from(uniqueUids));
+  const uniqueUidsArray = Array.from(uniqueUids);
+  const profilesPromise = uniqueUidsArray.length > 0 
+    ? supabase.from("profiles").select("id, first_name, last_name, avatar_url").in("id", uniqueUidsArray)
+    : Promise.resolve({ data: [] });
+    
+  const { data: profilesData } = await profilesPromise;
   
   const profilesNameMap: Record<string, string> = {};
   const profilesMap: Record<string, any> = {};
@@ -357,91 +362,10 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col relative bg-slate-50 animate-in fade-in zoom-in-[0.99] duration-700 ease-out">
+    <div className="h-screen w-full flex flex-col relative bg-background text-foreground animate-in fade-in zoom-in-[0.99] duration-700 ease-out">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
         *::-webkit-scrollbar { display: none; }
-        * { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
-
-      {/* Top header bar */}
-      <div className="pt-safe-or-4 px-4 pb-3 bg-white border-b border-slate-100 flex-shrink-0">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center flex-shrink-0 min-w-0 pr-2 relative z-50">
-            <button
-              type="button"
-              onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
-              className="flex items-center gap-2 active:opacity-70 transition-opacity min-w-0 text-left bg-slate-100 hover:bg-slate-200 pl-1 pr-3 py-1.5 rounded-full border border-slate-200/60 shadow-sm"
-            >
-              {groupsQuery.isLoading ? (
-                <div className="w-8 h-8 rounded-full bg-slate-300 animate-pulse flex-shrink-0" />
-              ) : activeGroup?.avatar_url ? (
-                <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 shadow-sm border border-slate-200">
-                  <img src={activeGroup.avatar_url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm"
-                  style={{ background: getGroupColor(activeGroup?.name || "Workspace"), color: "#fff" }}
-                >
-                  <span className="text-[11px] font-black tracking-wider">
-                    {getGroupInitials(activeGroup?.name || "W")}
-                  </span>
-                </div>
-              )}
-              <h1 className="text-[15px] font-black tracking-tight text-slate-800 truncate max-w-[140px]">
-                {groupsQuery.isLoading ? "Loading..." : (activeGroup?.name || "Workspace")}
-              </h1>
-              <ChevronDown size={14} strokeWidth={3} style={{ color: C.slate400 }} className="flex-shrink-0 ml-0.5" />
-            </button>
-
-            {/* Custom Popover Dropdown */}
-            {showWorkspaceDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowWorkspaceDropdown(false)} />
-                <div className="absolute top-[calc(100%+8px)] left-0 w-[220px] bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase px-3 py-2 mb-1">Switch Cravelist</p>
-                  {groupsQuery.data?.map(g => {
-                    const isActive = derivedGroupId === g.id;
-                    return (
-                      <button
-                        key={g.id}
-                        onClick={() => { setActiveGroupId(g.id); setShowWorkspaceDropdown(false); }}
-                        className={`w-full text-left px-2 py-2 rounded-xl transition-all flex items-center gap-3 ${isActive ? "" : "hover:bg-slate-50"}`}
-                        style={isActive ? { background: C.rose + "10" } : {}}
-                      >
-                        {g.avatar_url ? (
-                          <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 shadow-sm border border-slate-100">
-                            <img src={g.avatar_url} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm"
-                            style={{ background: getGroupColor(g.name), color: "#fff" }}
-                          >
-                            <span className="text-[11px] font-black tracking-wider">{getGroupInitials(g.name)}</span>
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0 pr-2">
-                           <span className="truncate block text-[15px] font-bold text-slate-700" style={isActive ? { color: C.rose } : {}}>{g.name}</span>
-                        </div>
-                        {isActive && <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mr-1 shadow-sm border border-white" style={{ background: C.rose }} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-          <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
-            <button type="button" onClick={() => setShowSearch(true)}
-              className="flex-1 max-w-[200px] h-11 flex items-center gap-2 bg-slate-50 rounded-full px-4 border border-slate-200 text-[15px] text-slate-400 font-medium overflow-hidden transition-all active:bg-slate-100 shadow-sm">
-              <Search size={16} className="flex-shrink-0" />
-              <span className="truncate">Find or Add...</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Tab content */}
       {activeTab === "list" && (
@@ -452,7 +376,6 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
           fetchNextPage={() => restaurantsQuery.fetchNextPage()}
           hasNextPage={!!restaurantsQuery.hasNextPage}
           isFetchingNextPage={restaurantsQuery.isFetchingNextPage}
-          // Filter props
           filterTab={filterTab}
           setFilterTab={setFilterTab}
           filterCategory={filterCategory}
@@ -461,6 +384,11 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
           setFilterVibes={setFilterVibes}
           sortBy={sortBy}
           setSortBy={setSortBy}
+          activeGroup={activeGroup}
+          groups={groupsQuery.data || []}
+          setActiveGroupId={setActiveGroupId}
+          showWorkspaceDropdown={showWorkspaceDropdown}
+          setShowWorkspaceDropdown={setShowWorkspaceDropdown}
         />
       )}
       {activeTab === "profile" && (
