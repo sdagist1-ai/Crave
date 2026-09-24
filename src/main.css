@@ -84,6 +84,10 @@
     outline-offset: 2px;
   }
 
+  /* No rubber-band bounce: each screen scrolls in its own container, and the
+     bounce pulled the header away from the top and showed blank space. */
+  * { overscroll-behavior: none; }
+
   *::-webkit-scrollbar { display: none; }
   * { scrollbar-width: none; }
 
