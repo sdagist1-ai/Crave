@@ -74,23 +74,30 @@ export async function cachePlacePhoto(photoName: string, placeId: string): Promi
   }
 }
 
-async function placeDetails(placeId: string) {
-  return callPlaces<{
-    openingHours: string[] | null;
-    photoName: string | null;
-    city: string | null;
-    area: string | null;
-    countryCode: string | null;
-  }>({ action: "details", placeId });
+export type PlaceDetails = {
+  openingHours: string[] | null;
+  photoName: string | null;
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
+  city: string | null;
+  area: string | null;
+  countryCode: string | null;
+};
+
+/** Hours, rating, price and location for one place (one Enterprise-tier request). */
+export async function placeDetails(placeId: string) {
+  return callPlaces<PlaceDetails>({ action: "details", placeId });
 }
 
 // ──────────────────────────────────────────────────────────────────
 // TTL Live Cloud Sync Helper
 // ──────────────────────────────────────────────────────────────────
-export async function syncRestaurantData(placeId: string, supabaseId: number) {
+export async function syncRestaurantData(placeId: string, supabaseId: number, hasPhoto: boolean) {
   try {
     const details = await placeDetails(placeId);
-    const photoUrl = details.photoName ? await cachePlacePhoto(details.photoName, placeId) : null;
+    // Photos are copied into Storage once; re-copying on every refresh just costs a Photo request.
+    const photoUrl = !hasPhoto && details.photoName ? await cachePlacePhoto(details.photoName, placeId) : null;
 
     const { error } = await supabase
       .from("restaurants")
@@ -98,6 +105,9 @@ export async function syncRestaurantData(placeId: string, supabaseId: number) {
         last_synced_at: new Date().toISOString(),
         ...(details.openingHours ? { opening_hours: details.openingHours } : {}),
         ...(photoUrl ? { photo_url: photoUrl } : {}),
+        ...(details.rating != null
+          ? { rating: details.rating, user_rating_count: details.userRatingCount, price_level: details.priceLevel }
+          : {}),
         ...(details.countryCode
           ? { city: details.city, area: details.area, country_code: details.countryCode }
           : {}),

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, CloudOff, Loader2, LocateFixed, Plus, Search, Star, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { cachePlacePhoto, PlacesError, searchPlaces, type PlaceResult } from "../lib/places";
+import { cachePlacePhoto, placeDetails, PlacesError, searchPlaces, type PlaceResult } from "../lib/places";
 import { useDebounce } from "../hooks/useDebounce";
 import { useApproxLocation } from "../hooks/useApproxLocation";
 import { VIBE_OPTIONS } from "../constants/theme";
@@ -27,6 +27,8 @@ function saveErrorMessage(err: unknown) {
   return "Couldn't save that spot. Check your connection and try again.";
 }
 
+const MIN_QUERY = 3;
+
 const TILE_TINTS = ["bg-accent-soft text-accent-ink", "bg-mint-soft text-mint-ink", "bg-sky-soft text-sky-ink", "bg-sun-soft text-sun-ink", "bg-violet-soft text-violet-ink"];
 function tileTint(name: string) {
   let h = 0;
@@ -43,7 +45,8 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   onClose: () => void;
 }) {
   const [query, setQuery] = useState(initialQuery);
-  const debouncedQuery = useDebounce(query, 350);
+  // Each search is a paid Google request: wait for a real pause and 3+ characters.
+  const debouncedQuery = useDebounce(query, 500);
   const [selected, setSelected] = useState<{ place: PlaceResult; from?: SavedPlace } | null>(null);
   const [vibes, setVibes] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
@@ -60,7 +63,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   useEffect(() => { if (!selected) inputRef.current?.focus(); }, [selected]);
 
   const trimmedQuery = debouncedQuery.trim();
-  const canSearch = trimmedQuery.length >= 2;
+  const canSearch = trimmedQuery.length >= MIN_QUERY;
   const results = useQuery({
     queryKey: ["searchRestaurants", trimmedQuery, coords?.lat.toFixed(2), coords?.lng.toFixed(2)],
     queryFn: ({ signal }) => searchPlaces(trimmedQuery, { coords, signal }),
@@ -70,6 +73,16 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     placeholderData: keepPreviousData, // keep previous results on screen while typing
   });
   const isTyping = query.trim() !== trimmedQuery;
+
+  // Search results carry no rating, price or hours (that would make every search
+  // an Enterprise request). Fetch them once for the place that was picked.
+  const details = useQuery({
+    queryKey: ["placeDetails", selected?.place.id],
+    queryFn: () => placeDetails(selected!.place.id),
+    enabled: !!selected,
+    staleTime: Infinity,
+    retry: 1,
+  });
 
   const choose = (place: PlaceResult, from?: SavedPlace) => {
     setSelected({ place, from });
@@ -84,6 +97,11 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     setSaving(true);
     setSaveError(null);
     try {
+      // Wait for the details if they're still loading; save without them if they fail.
+      const d = details.data ?? await queryClient.fetchQuery({
+        queryKey: ["placeDetails", place.id], queryFn: () => placeDetails(place.id), staleTime: Infinity,
+      }).catch(() => null);
+
       // Reuse the photo already cached for this place; otherwise copy Google's.
       const photoUrl = from?.photoUrl ?? (place.photoUrl ? await cachePlacePhoto(place.photoUrl, place.id) : null);
 
@@ -98,15 +116,15 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
         country_code: place.countryCode,
         latitude: place.lat,
         longitude: place.lng,
-        rating: place.rating ?? null,
-        user_rating_count: place.userRatingCount ?? null,
-        price_level: place.priceLevel ?? null,
+        rating: d?.rating ?? place.rating ?? null,
+        user_rating_count: d?.userRatingCount ?? place.userRatingCount ?? null,
+        price_level: d?.priceLevel ?? place.priceLevel ?? null,
         primary_type: place.primaryType ?? null,
         photo_url: photoUrl,
         vibes,
         notes: notes.trim(),
         last_synced_at: new Date().toISOString(),
-        opening_hours: place.openingHours ?? from?.openingHours ?? null,
+        opening_hours: d?.openingHours ?? place.openingHours ?? from?.openingHours ?? null,
       });
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
@@ -123,6 +141,8 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   // ─── Step 2: confirm & add ────────────────────────────────────────────────
   if (selected) {
     const { place, from } = selected;
+    const rating = details.data?.rating ?? place.rating;
+    const priceLevel = details.data?.priceLevel ?? place.priceLevel;
     const fromName = from ? groups.find((g) => g.id === from.groupId)?.name : null;
     return (
       <div role="dialog" aria-modal="true" aria-label={`Add ${place.name}`} className="fixed inset-0 z-50 flex flex-col bg-background animate-fade-in">
@@ -140,8 +160,8 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
             {[formatPrimaryType(place.primaryType), place.address].filter(Boolean).join(" · ")}
           </p>
           <div className="mb-7 flex flex-wrap gap-1.5">
-            {place.rating != null && <Tag tone="sun"><Star size={11} className="mr-1 fill-current" />{place.rating}</Tag>}
-            {formatPriceLevel(place.priceLevel) && <Tag>{formatPriceLevel(place.priceLevel)}</Tag>}
+            {rating != null && <Tag tone="sun"><Star size={11} className="mr-1 fill-current" />{rating}</Tag>}
+            {formatPriceLevel(priceLevel) && <Tag>{formatPriceLevel(priceLevel)}</Tag>}
             {fromName && <Tag tone="bg-accent-tint text-accent-ink">Also in {fromName}</Tag>}
           </div>
 
@@ -216,7 +236,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
       )}
 
       <div className="flex-1 overflow-y-auto pb-safe">
-        {query.trim().length < 2 ? (
+        {query.trim().length < MIN_QUERY ? (
           <div className="flex flex-col items-center px-8 py-16 text-center text-muted">
             <Search size={32} className="mb-3 text-border-strong" aria-hidden="true" />
             <p className="m-0 text-sm">
@@ -256,7 +276,8 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate text-[15px] font-semibold">{place.name}</span>
                       <span className="truncate text-[13px] text-muted">{subtitle || place.address}</span>
-                      <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <span className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted">
+                        {subtitle && <span className="min-w-0 max-w-full truncate">{place.address.split(",")[0]}</span>}
                         {place.rating != null && <span className="flex items-center gap-0.5 font-medium text-ink"><Star size={11} className="fill-[#f59e0b] text-[#f59e0b]" />{place.rating}</span>}
                         {formatPriceLevel(place.priceLevel) && <span>{formatPriceLevel(place.priceLevel)}</span>}
                         {place.openNow != null && <span className={place.openNow ? "text-mint-ink" : ""}>{place.openNow ? "Open now" : "Closed"}</span>}
