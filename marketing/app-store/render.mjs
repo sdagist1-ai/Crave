@@ -2,6 +2,7 @@
 //   node render.mjs            iPhone 6.9" (1290×2796) from screens/*        → app-store-assets/v2/
 //   node render.mjs --ipad     iPad 13"    (2064×2752) from screens/ipad/*   → app-store-assets/v2/ipad/
 //   node render.mjs --6.5      iPhone 6.5" (1284×2778) from screens/*        → app-store-assets/v2/iphone-6.5/
+//   node render.mjs --phones   just the framed iPhone, 720px wide WebP        → site/img/<screen>.webp
 // Add screen names (e.g. 3-spin) to render only those slides.
 // Needs Playwright with a Chromium: `npm i -D playwright && npx playwright install chromium`.
 import { chromium } from "playwright";
@@ -14,6 +15,7 @@ const root = resolve(here, "../..");
 const args = process.argv.slice(2);
 const ipad = args.includes("--ipad");
 const small = !ipad && args.includes("--6.5");
+const phones = !ipad && args.includes("--phones");
 const out = resolve(root, "app-store-assets/v2", ipad ? "ipad" : small ? "iphone-6.5" : "");
 const shots = resolve(here, "screens", ipad ? "ipad" : "");
 mkdirSync(out, { recursive: true });
@@ -114,7 +116,25 @@ for (const s of slides) {
       });
     });
   }, slide.patches ?? []);
-  await page.screenshot({ path: resolve(out, `${s.file}_${W}x${H}.png`) });
+  if (phones) {
+    // Transparent PNG of the frame only, shrunk and re-encoded as WebP in the page.
+    await page.evaluate(() => {
+      document.body.style.background = "transparent";
+      document.querySelectorAll(".glow,.ring,.copy,.chip").forEach((el) => el.remove());
+      document.querySelector(".phone").style.boxShadow = "inset 0 0 0 6px #334155";
+    });
+    const png = await page.locator(".phone").screenshot({ omitBackground: true });
+    const webp = await page.evaluate(async (b64) => {
+      const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+      const c = document.createElement("canvas"); c.width = 720; c.height = Math.round(img.height * 720 / img.width);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL("image/webp", 0.86).split(",")[1];
+    }, png.toString("base64"));
+    mkdirSync(resolve(root, "site/img"), { recursive: true });
+    writeFileSync(resolve(root, "site/img", `${s.screen}.webp`), Buffer.from(webp, "base64"));
+  } else {
+    await page.screenshot({ path: resolve(out, `${s.file}_${W}x${H}.png`) });
+  }
   console.log("wrote", s.file);
 }
 rmSync(tmp, { force: true });
