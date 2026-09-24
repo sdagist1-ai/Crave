@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Share } from "@capacitor/share";
 import {
@@ -317,8 +318,16 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
 }
 
 function PhotoViewer({ photos, start, onClose }: { photos: string[]; start: number; onClose: () => void }) {
-  return (
-    <div role="dialog" aria-modal="true" aria-label="Photos" className="fixed inset-0 z-[80] flex flex-col bg-black animate-fade-in">
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Rendered on <body>: inside the scrolled detail page, iOS WebKit positions a
+  // fixed overlay against the scroll container and it ends up half off-screen.
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Photos" className="fixed inset-0 z-[80] flex h-dvh flex-col bg-black animate-fade-in">
       <div className="flex justify-end px-4 pt-safe">
         <button type="button" onClick={onClose} aria-label="Close photos"
           className="mt-2 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white">
@@ -341,6 +350,7 @@ function PhotoViewer({ photos, start, onClose }: { photos: string[]; start: numb
         ))}
       </div>
       {photos.length > 1 && <p className="pb-safe text-center font-mono text-xs text-white/60">Swipe for more · {photos.length} photos</p>}
-    </div>
+    </div>,
+    document.body,
   );
 }
