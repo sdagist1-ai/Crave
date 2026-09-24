@@ -15,6 +15,10 @@ migration history (`supabase migration list`).
 - `…_integrity_and_performance.sql` — FK delete rules, uniqueness, indexes,
   database-derived `restaurants.visited`.
 - `…_column_types.sql` — numeric coordinates/rating, jsonb vibes/hours, uuid owner.
+- `…_group_feed_rpc.sql` — `get_group_feed()`: a page of a list with reviews,
+  authors, adder and score aggregates in one call (filters and sort server-side).
+- `…_redesign_data.sql` — city/area/country columns, `get_my_groups()`,
+  `get_my_stats()`, text search in `get_group_feed()`.
 
 Make new changes as new migration files rather than in the dashboard, then
 regenerate the client types:
@@ -25,6 +29,11 @@ npx supabase gen types typescript --project-id kqdsgmiutfsxsjgubget > src/types/
 
 ## Rules the app relies on
 
+- Lists are read through `get_group_feed(group, tab, category, vibes, sort, limit, offset, restaurant_id, search)`;
+  pass `p_restaurant_id` to fetch one restaurant in the same shape.
+- `get_my_groups()` returns every list the user is in, with members and counts
+  (places, tried, MUSTs, cities, countries). A MUST is a tried place whose
+  members' average score is 9.0 or higher.
 - Groups are created only via `create_group(name)` and joined only via
   `join_group(code)`; both return the group id.
 - Members see only their own groups, co-members' profiles and co-members' reviews.
@@ -32,6 +41,17 @@ npx supabase gen types typescript --project-id kqdsgmiutfsxsjgubget > src/types/
   member of that list has reviewed it); values sent by the client are ignored.
 - `restaurants.owner` defaults to the signed-in user.
 - `(group_id, place_id)` and `(user_id, place_id)` on reviews are unique.
+
+## Edge Functions
+
+`functions/places` proxies Google Places (API (New)) with the
+`GOOGLE_PLACES_API_KEY` secret: `search`, `details`, `photo` (copies a photo into
+the `place_photos` bucket) and `backfill_locations`.
+
+`backfill_locations` fills `city` / `area` / `country_code` for places saved
+before those columns existed (40 per call). It runs as the caller, so RLS limits
+it to their own lists; the app calls it automatically from Passport when a
+list has places without a location.
 
 ## Backup
 

@@ -1,35 +1,36 @@
-import { Icon } from "@iconify/react";
-import { TabId } from "../types";
+import { Dices, Globe, List, User, type LucideIcon } from "lucide-react";
+import type { TabId } from "../types";
+
+const TABS: { id: TabId; label: string; Icon: LucideIcon }[] = [
+  { id: "list", label: "Cravelist", Icon: List },
+  { id: "passport", label: "Passport", Icon: Globe },
+  { id: "spin", label: "Spin", Icon: Dices },
+  { id: "profile", label: "Profile", Icon: User },
+];
 
 export function BottomTabBar({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
-  const tabs: { id: TabId; label: string; icon: string; activeIcon?: string }[] = [
-    { id: "list", label: "List", icon: "solar:hamburger-menu-linear", activeIcon: "solar:hamburger-menu-bold" },
-    { id: "passport", label: "Passport", icon: "solar:global-linear", activeIcon: "solar:global-bold" },
-    { id: "spin", label: "Spin", icon: "mdi:dice-5-outline", activeIcon: "mdi:dice-5" },
-    { id: "profile", label: "Profile", icon: "solar:user-linear", activeIcon: "solar:user-bold" },
-  ];
-
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-t border-border/50 pb-safe">
-      <div className="flex items-center justify-around h-20 px-6">
-        {tabs.map((tab) => {
-          const isActive = active === tab.id;
-          const displayIcon = isActive ? (tab.activeIcon || tab.icon) : tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onChange(tab.id)}
-              className={`flex flex-col items-center gap-1.5 transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon icon={displayIcon} width={24} height={24} />
-              <span className="text-[10px] font-medium">{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-5 bottom-safe z-40 mx-auto flex h-[68px] max-w-md items-center justify-around rounded-[26px] border border-border bg-surface/90 shadow-float backdrop-blur-xl"
+    >
+      {TABS.map(({ id, label, Icon }) => {
+        const isActive = active === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onChange(id)}
+            aria-label={label}
+            aria-current={isActive ? "page" : undefined}
+            className={`flex h-11 w-[52px] items-center justify-center rounded-2xl transition-colors ${
+              isActive ? "bg-accent-soft text-accent" : "text-muted active:bg-subtle"
+            }`}
+          >
+            <Icon size={22} strokeWidth={2} />
+          </button>
+        );
+      })}
     </nav>
   );
 }

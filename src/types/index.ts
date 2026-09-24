@@ -10,6 +10,7 @@ export type Review = {
   place_id: string;
   user_id: string;
   authorName?: string;
+  authorAvatar?: string | null;
   score: number | null;
   notes: string | null;
   photo_url: string | null;
@@ -17,6 +18,7 @@ export type Review = {
   created_at: string;
 };
 
+/** A Cravelist the user belongs to, with members and counts (from get_my_groups). */
 export type Group = {
   id: string;
   name: string;
@@ -24,7 +26,19 @@ export type Group = {
   created_by: string | null;
   created_at: string;
   avatar_url?: string | null;
-  group_members?: { profiles: Profile }[];
+  members: Profile[];
+  place_count: number;
+  tried_count: number;
+  must_count: number;
+  city_count: number;
+  country_count: number;
+};
+
+export type MyStats = {
+  tried: number;
+  saved: number;
+  avg_score: number | null;
+  member_since: string | null;
 };
 
 export type Restaurant = {
@@ -33,6 +47,10 @@ export type Restaurant = {
   groupId: string;
   name: string;
   address: string;
+  city: string | null;
+  /** Neighbourhood-level name shown on cards, e.g. "Williamsburg" */
+  area: string | null;
+  countryCode: string | null;
   latitude: number;
   longitude: number;
   rating: number | null;
@@ -47,7 +65,7 @@ export type Restaurant = {
   openingHours: string[] | null;
   lastSyncedAt: string | null;
 
-  // Asynchronous Dual-Rating Data
+  // The signed-in user's own review
   visited: boolean;
   notes: string | null;
   userScore: number | null;
@@ -55,13 +73,20 @@ export type Restaurant = {
   visitPhotoUrls: string[];
   visitedAt: string | null;
 
+  /** Reviews by members of this list */
   reviews: Review[];
   allVisitPhotos?: { url: string; authorId: string; authorName?: string }[];
   addedBy?: Profile | null;
-  
+  /** Average score from the list's members, and how many have scored it */
+  avgScore: number | null;
+  ratedCount: number;
+
   createdAt: string;
 };
 
-export type TabId = "list" | "profile" | "calendar" | "spin" | "passport";
+export type TabId = "list" | "passport" | "spin" | "profile";
 
 export type SortOption = "newest" | "rating" | "score" | "visited";
+
+/** A group average at or above this earns the MUST badge. */
+export const MUST_SCORE = 9;

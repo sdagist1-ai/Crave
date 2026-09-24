@@ -104,8 +104,11 @@ export type Database = {
       restaurants: {
         Row: {
           address: string
+          area: string | null
           booking_platform: string | null
           booking_url: string | null
+          city: string | null
+          country_code: string | null
           created_at: string
           group_id: string
           id: number
@@ -128,8 +131,11 @@ export type Database = {
         }
         Insert: {
           address: string
+          area?: string | null
           booking_platform?: string | null
           booking_url?: string | null
+          city?: string | null
+          country_code?: string | null
           created_at?: string
           group_id: string
           id?: number
@@ -152,8 +158,11 @@ export type Database = {
         }
         Update: {
           address?: string
+          area?: string | null
           booking_platform?: string | null
           booking_url?: string | null
+          city?: string | null
+          country_code?: string | null
           created_at?: string
           group_id?: string
           id?: number
@@ -239,6 +248,22 @@ export type Database = {
     Functions: {
       create_group: { Args: { group_name: string }; Returns: string }
       delete_user_account: { Args: never; Returns: undefined }
+      get_group_feed: {
+        Args: {
+          p_category?: string
+          p_group_id: string
+          p_limit?: number
+          p_offset?: number
+          p_restaurant_id?: number
+          p_search?: string
+          p_sort?: string
+          p_tab?: string
+          p_vibes?: string[]
+        }
+        Returns: Json[]
+      }
+      get_my_groups: { Args: never; Returns: Json[] }
+      get_my_stats: { Args: never; Returns: Json }
       join_group: { Args: { invite_code: string }; Returns: string }
     }
     Enums: {

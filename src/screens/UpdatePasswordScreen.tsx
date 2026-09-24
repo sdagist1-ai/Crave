@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Icon } from "@iconify/react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { Glow, PrimaryButton, TextField } from "../components/ui";
 
 export function UpdatePasswordScreen({ onComplete }: { onComplete: () => void }) {
   const [password, setPassword] = useState("");
@@ -8,20 +9,15 @@ export function UpdatePasswordScreen({ onComplete }: { onComplete: () => void })
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
-    if (!password || password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < 6) {
+      setError("Use at least 6 characters.");
       return;
     }
-    
     setLoading(true);
     setError(null);
     try {
-      const { error: err } = await supabase.auth.updateUser({
-        password: password,
-      });
+      const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
-      
-      // Successfully updated, exit recovery mode!
       onComplete();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -31,40 +27,24 @@ export function UpdatePasswordScreen({ onComplete }: { onComplete: () => void })
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 font-sans animate-in fade-in zoom-in-[0.98] duration-700 absolute inset-0 z-50">
-      <div className="w-full max-w-sm flex flex-col items-center">
-        <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center shadow-sm mb-6">
-          <Icon icon="solar:lock-keyhole-bold" className="text-primary-foreground text-3xl" />
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-background">
+      <Glow side="right" />
+      <form
+        className="relative mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 px-6 pt-safe pb-safe"
+        onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+      >
+        <div className="mb-6">
+          <div className="mb-3 font-mono text-xs tracking-[0.14em] text-muted uppercase">Account</div>
+          <h1 className="m-0 font-display text-[44px] leading-none font-extrabold tracking-[-0.03em]">New password</h1>
+          <p className="m-0 mt-3 text-[15px] text-muted">Choose a new password for your Crave account.</p>
         </div>
-        <h1 className="font-heading text-[32px] font-black text-foreground leading-none mb-2 tracking-tight text-center">
-          Reset Password
-        </h1>
-        <p className="text-[16px] font-medium text-muted-foreground mb-10 text-center">
-          Please enter your new password below.
-        </p>
-        
-        <div className="w-full space-y-4">
-          <div className="relative">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-8 py-5 rounded-[2.5rem] border border-border/50 bg-card text-[16px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-all shadow-sm"
-              placeholder="New Password"
-            />
-          </div>
-        </div>
-
-        {error && <p className="text-destructive text-sm font-bold mt-4 w-full text-center">{error}</p>}
-
-        <button 
-          onClick={handleSubmit} 
-          disabled={loading || !password}
-          className="w-full py-5 rounded-[2.5rem] bg-primary text-primary-foreground font-bold text-[18px] shadow-2xl shadow-primary/40 mt-8 active:scale-[0.98] transition-all disabled:opacity-50"
-        >
-          {loading ? "Updating..." : "Save New Password"}
-        </button>
-      </div>
+        <TextField label="New password" type="password" autoComplete="new-password" autoFocus
+          value={password} onChange={(e) => setPassword(e.target.value)} />
+        {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+        <PrimaryButton type="submit" disabled={loading || !password} tone="accent">
+          {loading && <Loader2 size={18} className="animate-spin" />} Save new password
+        </PrimaryButton>
+      </form>
     </div>
   );
 }

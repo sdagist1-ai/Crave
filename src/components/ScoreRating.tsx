@@ -1,26 +1,26 @@
-import { C } from "../constants/theme";
+import { MUST_SCORE } from "../types";
 
-export function ScoreRating({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
-  function getScoreColor(n: number): string {
-    if (n <= 3) return C.rose;
-    if (n <= 5) return "#F97316";
-    if (n <= 7) return C.amber;
-    if (n <= 9) return "#84CC16";
-    return C.emerald;
-  }
-
+/** 1–10 score picker (radio group). 9–10 are highlighted as MUST territory. */
+export function ScoreRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex gap-1.5 flex-wrap justify-center">
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => {
-        const isSelected = i === value;
-        const color = getScoreColor(i);
+    <div role="radiogroup" aria-label="Score out of 10" className="grid grid-cols-5 gap-2">
+      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
+        const selected = n === value;
         return (
-          <button key={i} type="button" onClick={() => onChange?.(i)} disabled={!onChange}
-            className="w-10 h-10 rounded-xl text-sm font-black transition-all active:scale-110 flex items-center justify-center"
-            style={isSelected
-              ? { background: color, color: "#fff", boxShadow: `0 4px 12px ${color}40` }
-              : { background: C.slate100, color: C.slate500 }}>
-            {i}
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={`${n} out of 10`}
+            onClick={() => onChange(n)}
+            className={`h-12 rounded-2xl font-mono text-base font-semibold transition-all active:scale-95 ${
+              selected
+                ? n >= MUST_SCORE ? "bg-accent text-white shadow-accent" : "bg-ink text-white"
+                : "border border-border bg-surface text-ink-2"
+            }`}
+          >
+            {n}
           </button>
         );
       })}

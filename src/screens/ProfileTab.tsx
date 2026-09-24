@@ -1,412 +1,359 @@
-import { useState, useEffect } from "react";
-import { Icon } from "@iconify/react";
-import { useQueryClient } from "@tanstack/react-query";
-import { getCurrentUserId, supabase } from "../lib/supabase";
-import { Group, Profile } from "../types";
+import { useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Share } from "@capacitor/share";
+import { Camera, Check, Copy, Link2, Loader2, LogOut, Pencil, Plus, Settings, Share2, Trash2 } from "lucide-react";
+import type { Group, Profile } from "../types";
+import { supabase } from "../lib/supabase";
+import { fetchMyStats } from "../lib/groups";
+import { uploadAvatar } from "../lib/images";
+import { Avatar, AvatarStack, Glow, PageTitle, PrimaryButton, Sheet, TextField } from "../components/ui";
 
-const getColor = (str: string) => {
-  const colors = ["#ff453a", "#ff9f0a", "#32ade6", "#0a84ff", "#af52de", "#ff375f", "#34c759"];
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-};
+type SheetId = null | "settings" | "edit-name" | "join" | "create" | "delete" | { invite: Group };
 
-const getInitials = (fName: string | null, lName: string | null) => {
-  if (!fName && !lName) return "?";
-  return `${fName?.charAt(0) || ""}${lName?.charAt(0) || ""}`.toUpperCase();
-};
-
-export function ProfileTab() {
+export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup }: {
+  uid: string;
+  groups: Group[];
+  activeGroupId: string | undefined;
+  onSelectGroup: (id: string) => void;
+}) {
   const queryClient = useQueryClient();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sheet, setSheet] = useState<SheetId>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-
-  const [joinCode, setJoinCode] = useState("");
-  const [joining, setJoining] = useState(false);
-
-  const [newGroupName, setNewGroupName] = useState("");
-  const [creating, setCreating] = useState(false);
-
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [uploadingGroupAvatarId, setUploadingGroupAvatarId] = useState<string | null>(null);
-
-  const [errorModalMsg, setErrorModalMsg] = useState<string | null>(null);
-
-  // Name Editing State
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editFirstName, setEditFirstName] = useState("");
-  const [editLastName, setEditLastName] = useState("");
-  const [savingName, setSavingName] = useState(false);
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      if (!e.target.files || e.target.files.length === 0) return;
-      if (!profile) return;
-      setUploadingAvatar(true);
-      const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${profile.id}-${Math.random()}.${fileExt}`;
-      const filePath = `public/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      
-      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', profile.id);
-      
-      setProfile({ ...profile, avatar_url: data.publicUrl });
-      loadData();
-    } catch (err: any) {
-      setErrorModalMsg(err.message || "An error occurred");
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
-  const handleGroupAvatarUpload = async (groupId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      if (!e.target.files || e.target.files.length === 0 || !profile) return;
-      setUploadingGroupAvatarId(groupId);
-      const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `group-${profile.id}-${Math.random()}.${fileExt}`;
-      const filePath = `groups/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      
-      const { error: updateError } = await supabase.from('groups').update({ avatar_url: data.publicUrl }).eq('id', groupId);
-      if (updateError) throw updateError;
-      
-      queryClient.invalidateQueries({ queryKey: ["groups"] });
-      loadData();
-    } catch (err: any) {
-      setErrorModalMsg(err.message || "An error occurred");
-    } finally {
-      setUploadingGroupAvatarId(null);
-    }
-  };
-
-  const handleSaveName = async () => {
-    if (!profile) return;
-    setSavingName(true);
-    try {
-      const { error } = await supabase.from('profiles').update({
-        first_name: editFirstName,
-        last_name: editLastName
-      }).eq('id', profile.id);
-      
-      // Also update auth metadata to keep it in sync
-      await supabase.auth.updateUser({
-        data: { first_name: editFirstName, last_name: editLastName }
-      });
-
+  const profile = useQuery({
+    queryKey: ["profile", uid],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", uid).single();
       if (error) throw error;
-      setProfile({ ...profile, first_name: editFirstName, last_name: editLastName });
-      setIsEditingName(false);
-    } catch (err: any) {
-      setErrorModalMsg(err.message || "Failed to update name");
-    } finally {
-      setSavingName(false);
-    }
-  };
+      return data;
+    },
+  });
+  const stats = useQuery({ queryKey: ["restaurants", "my-stats", uid], queryFn: fetchMyStats });
 
-  const loadData = async () => {
+  const me = profile.data;
+  const since = stats.data?.member_since ?? me?.created_at;
+
+  const close = () => { setSheet(null); setError(null); };
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
     try {
-      const userId = await getCurrentUserId();
-      if (!userId) return;
-
-      const [profileRes, groupsRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", userId).single(),
-        supabase.from("groups").select("*, group_members(profiles(*))").order("created_at", { ascending: true })
-      ]);
-
-      if (profileRes.data) setProfile(profileRes.data);
-      if (groupsRes.data) setGroups(groupsRes.data);
+      await fn();
     } catch (err) {
-      console.error(err);
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  useEffect(() => { loadData(); }, []);
-
-  const handleCopy = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
+  const onPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadAvatar(file, uid);
+      const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", uid);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    } catch {
+      setError("Couldn't update your photo. Try again.");
+      setSheet("settings");
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleJoin = async () => {
-    if (joinCode.length < 6) return setErrorModalMsg("Code must be at least 6 characters.");
-    setJoining(true);
-    const { error } = await supabase.rpc("join_group", { invite_code: joinCode.toUpperCase() });
-    setJoining(false);
-    if (error) setErrorModalMsg(error.message);
-    else { setJoinCode(""); loadData(); }
-  };
-
-  const handleCreate = async () => {
-    if (newGroupName.length < 3) return setErrorModalMsg("Name too short.");
-    setCreating(true);
-    const { error } = await supabase.rpc("create_group", { group_name: newGroupName });
-    setCreating(false);
-    if (error) setErrorModalMsg(error.message);
-    else { setNewGroupName(""); loadData(); }
-  };
-
-  const handleSignOut = async () => {
+  const signOut = async () => {
     queryClient.clear();
     await supabase.auth.signOut();
   };
 
-  const confirmDelete = async () => {
-    setShowDeleteConfirm(false);
-    setDeleting(true);
-    const { error } = await supabase.rpc("delete_user_account");
-    if (error) {
-      setErrorModalMsg(error.message);
-      setDeleting(false);
-    } else {
-      await handleSignOut();
+  return (
+    <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
+      <Glow side="left" opacity={0.12} />
+      <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+
+      <div className="relative flex flex-col gap-4 px-5 pt-safe">
+        <div className="flex items-center justify-between pt-2">
+          <PageTitle>Profile</PageTitle>
+          <button type="button" onClick={() => setSheet("settings")} aria-label="Settings"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface">
+            <Settings size={20} />
+          </button>
+        </div>
+
+        {/* Me */}
+        <section className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface p-4">
+          <div className="flex items-center gap-3.5">
+            <div className="relative shrink-0">
+              <span className="block rounded-full border-[3px] border-accent p-0.5">
+                <Avatar person={me ?? { id: uid, first_name: null, last_name: null, avatar_url: null }} size={54} />
+              </span>
+              <button type="button" onClick={() => fileInput.current?.click()} aria-label="Change photo"
+                className="absolute -right-1 -bottom-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-ink text-white">
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+              </button>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="truncate text-xl font-bold">
+                {me ? [me.first_name, me.last_name].filter(Boolean).join(" ") || "Add your name" : " "}
+              </div>
+              {since && (
+                <div className="text-[13px] text-muted">
+                  Craving since {new Date(since).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                </div>
+              )}
+            </div>
+            <button type="button" onClick={() => setSheet("edit-name")}
+              className="h-9 shrink-0 rounded-full border border-border bg-background px-3.5 text-[13px] font-semibold">
+              Edit
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Stat value={stats.data?.tried} label="Tried" />
+            <Stat value={stats.data?.saved} label="Saved" />
+            <Stat value={stats.data?.avg_score != null ? Number(stats.data.avg_score).toFixed(1) : stats.data ? "—" : undefined} label="Avg you give" accent />
+          </div>
+        </section>
+
+        {/* Lists */}
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="m-0 text-[17px] font-semibold">My Cravelists</h2>
+            <span className="font-mono text-xs text-muted">{groups.length}</span>
+          </div>
+          <ul className="m-0 flex list-none flex-col gap-0.5 rounded-[22px] border border-border bg-surface p-1.5">
+            {groups.map((g) => {
+              const active = g.id === activeGroupId;
+              return (
+                <li key={g.id} className={`flex items-center gap-2 rounded-2xl pr-1.5 ${active ? "bg-accent-tint" : ""}`}>
+                  <button type="button" onClick={() => onSelectGroup(g.id)} aria-pressed={active}
+                    className="flex min-w-0 flex-1 items-center gap-3 p-2.5 text-left">
+                    <span className="w-[58px] shrink-0"><AvatarStack people={g.members} max={2} size={28} /></span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-[15px] font-semibold">{g.name}</span>
+                      <span className="text-xs text-muted">
+                        {g.members.length} {g.members.length === 1 ? "member" : "members"} · {g.place_count} spots
+                      </span>
+                    </span>
+                  </button>
+                  {active && (
+                    <span className="rounded-full bg-accent px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-white">ACTIVE</span>
+                  )}
+                  <button type="button" onClick={() => setSheet({ invite: g })} aria-label={`Invite people to ${g.name}`}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface">
+                    <Link2 size={17} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <button type="button" onClick={() => setSheet("join")}
+            className="flex h-[84px] flex-col items-start justify-between rounded-[20px] border border-dashed border-border-strong bg-surface p-3.5 text-left">
+            <Link2 size={18} aria-hidden="true" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold">Join with code</span>
+              <span className="text-[11px] text-muted">Got an invite code?</span>
+            </span>
+          </button>
+          <button type="button" onClick={() => setSheet("create")}
+            className="flex h-[84px] flex-col items-start justify-between rounded-[20px] bg-ink p-3.5 text-left text-white">
+            <Plus size={18} aria-hidden="true" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold">New Cravelist</span>
+              <span className="text-[11px] text-border-strong">Start one, invite anyone</span>
+            </span>
+          </button>
+        </div>
+
+        <div className="flex justify-center gap-5 text-[13px]">
+          <button type="button" onClick={signOut} className="h-11 text-muted">Sign out</button>
+          <button type="button" onClick={() => setSheet("delete")} className="h-11 text-danger">Delete account</button>
+        </div>
+      </div>
+
+      {/* ─── Sheets ─── */}
+      {sheet === "settings" && (
+        <Sheet title="Settings" onClose={close}>
+          {error && <p role="alert" className="m-0 mb-3 text-sm text-danger">{error}</p>}
+          <div className="flex flex-col gap-2 pb-2">
+            <SheetAction icon={<Pencil size={18} />} onClick={() => setSheet("edit-name")}>Edit name</SheetAction>
+            <SheetAction icon={<Camera size={18} />} onClick={() => { close(); fileInput.current?.click(); }}>Change photo</SheetAction>
+            <SheetAction icon={<LogOut size={18} />} onClick={signOut}>Sign out</SheetAction>
+            <SheetAction icon={<Trash2 size={18} />} onClick={() => setSheet("delete")} danger>Delete account</SheetAction>
+          </div>
+        </Sheet>
+      )}
+
+      {sheet === "edit-name" && me && (
+        <EditNameSheet profile={me} busy={busy} error={error} onClose={close}
+          onSave={(first, last) => run(async () => {
+            const { error } = await supabase.from("profiles").update({ first_name: first, last_name: last }).eq("id", uid);
+            if (error) throw error;
+            await supabase.auth.updateUser({ data: { first_name: first, last_name: last } });
+            queryClient.invalidateQueries({ queryKey: ["profile"] });
+            queryClient.invalidateQueries({ queryKey: ["groups"] });
+            close();
+          })}
+        />
+      )}
+
+      {sheet === "join" && (
+        <CodeSheet title="Join a Cravelist" label="Invite code" placeholder="ABC123" cta="Join" busy={busy} error={error} onClose={close}
+          transform={(v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)}
+          valid={(v) => v.length === 6}
+          onSubmit={(code) => run(async () => {
+            const { data, error } = await supabase.rpc("join_group", { invite_code: code });
+            if (error) throw new Error(error.message.includes("Invalid share code") ? "That code doesn't match a Cravelist." : error.message);
+            await queryClient.invalidateQueries({ queryKey: ["groups"] });
+            if (data) onSelectGroup(data);
+            close();
+          })}
+        />
+      )}
+
+      {sheet === "create" && (
+        <CodeSheet title="New Cravelist" label="Name" placeholder="Weekend Crew" cta="Create" busy={busy} error={error} onClose={close}
+          transform={(v) => v.slice(0, 60)}
+          valid={(v) => v.trim().length >= 1}
+          onSubmit={(name) => run(async () => {
+            const { data, error } = await supabase.rpc("create_group", { group_name: name.trim() });
+            if (error) throw error;
+            await queryClient.invalidateQueries({ queryKey: ["groups"] });
+            if (data) onSelectGroup(data);
+            close();
+          })}
+        />
+      )}
+
+      {sheet && typeof sheet === "object" && <InviteSheet group={sheet.invite} onClose={close} />}
+
+      {sheet === "delete" && (
+        <Sheet title="Delete your account?" onClose={close}>
+          <p className="m-0 mb-2 text-[15px] text-ink-2">
+            This permanently deletes your profile and your reviews. Places you added stay in shared lists for the people still in them.
+          </p>
+          <p className="m-0 mb-5 text-[15px] text-ink-2">This can't be undone.</p>
+          {error && <p role="alert" className="m-0 mb-3 text-sm text-danger">{error}</p>}
+          <div className="flex gap-2 pb-2">
+            <button type="button" onClick={close} className="h-[54px] flex-1 rounded-[18px] border border-border text-[15px] font-semibold">Cancel</button>
+            <button type="button" disabled={busy}
+              onClick={() => run(async () => {
+                const { error } = await supabase.rpc("delete_user_account");
+                if (error) throw error;
+                await signOut();
+              })}
+              className="flex h-[54px] flex-1 items-center justify-center gap-2 rounded-[18px] bg-danger text-[15px] font-semibold text-white disabled:opacity-50">
+              {busy && <Loader2 size={18} className="animate-spin" />} Delete
+            </button>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+function Stat({ value, label, accent = false }: { value: number | string | undefined; label: string; accent?: boolean }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-[14px] bg-background px-3 py-2.5">
+      <span className={`font-display text-2xl leading-none font-extrabold tabular ${accent ? "text-accent-ink" : ""}`}>
+        {value ?? <span className="inline-block h-6 w-8 animate-pulse rounded bg-subtle align-middle" />}
+      </span>
+      <span className="text-[11px] text-muted">{label}</span>
+    </div>
+  );
+}
+
+function SheetAction({ icon, children, onClick, danger = false }: { icon: React.ReactNode; children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`flex h-[54px] items-center gap-3 rounded-[18px] bg-subtle px-4 text-left text-[15px] font-semibold ${danger ? "text-danger" : "text-ink"}`}>
+      {icon}{children}
+    </button>
+  );
+}
+
+function EditNameSheet({ profile, busy, error, onClose, onSave }: {
+  profile: Profile; busy: boolean; error: string | null; onClose: () => void; onSave: (first: string, last: string) => void;
+}) {
+  const [first, setFirst] = useState(profile.first_name ?? "");
+  const [last, setLast] = useState(profile.last_name ?? "");
+  return (
+    <Sheet title="Your name" onClose={onClose}>
+      <form className="flex flex-col gap-3 pb-2" onSubmit={(e) => { e.preventDefault(); onSave(first.trim(), last.trim()); }}>
+        <TextField label="First name" value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="given-name" autoFocus />
+        <TextField label="Last name" value={last} onChange={(e) => setLast(e.target.value)} autoComplete="family-name" />
+        {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+        <PrimaryButton type="submit" disabled={busy || !first.trim()} className="mt-2">
+          {busy && <Loader2 size={18} className="animate-spin" />} Save
+        </PrimaryButton>
+      </form>
+    </Sheet>
+  );
+}
+
+function CodeSheet({ title, label, placeholder, cta, busy, error, onClose, onSubmit, transform, valid }: {
+  title: string; label: string; placeholder: string; cta: string; busy: boolean; error: string | null;
+  onClose: () => void; onSubmit: (v: string) => void; transform: (v: string) => string; valid: (v: string) => boolean;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <form className="flex flex-col gap-3 pb-2" onSubmit={(e) => { e.preventDefault(); if (valid(value)) onSubmit(value); }}>
+        <TextField label={label} value={value} placeholder={placeholder} autoFocus autoCapitalize="characters"
+          onChange={(e) => setValue(transform(e.target.value))} />
+        {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+        <PrimaryButton type="submit" disabled={busy || !valid(value)} className="mt-2">
+          {busy && <Loader2 size={18} className="animate-spin" />} {cta}
+        </PrimaryButton>
+      </form>
+    </Sheet>
+  );
+}
+
+function InviteSheet({ group, onClose }: { group: Group; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const code = group.share_code ?? "";
+  const message = `Join "${group.name}" on Crave — open the app, tap Profile → Join with code, and enter ${code}`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable */ }
+  };
+  const share = async () => {
+    try {
+      await Share.share({ title: `Join ${group.name} on Crave`, text: message, dialogTitle: "Invite to Crave" });
+    } catch {
+      copy();
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <Icon icon="ph:spinner-gap-bold" className="animate-spin text-primary size-8" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      <main className="flex-1 overflow-y-auto pb-32 px-4 pt-16">
-        
-        {/* Profile Card */}
-        <div className="bg-card rounded-[2.5rem] p-8 border border-border/50 shadow-sm flex flex-col items-center mb-10">
-          <label className="relative mb-4 cursor-pointer group">
-            <div className="w-24 h-24 rounded-full border-4 border-background shadow-md overflow-hidden bg-secondary flex items-center justify-center">
-              {uploadingAvatar ? (
-                <Icon icon="ph:spinner-gap-bold" className="animate-spin text-primary size-8" />
-              ) : profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-              ) : (
-                <Icon icon="solar:user-bold" className="text-muted-foreground size-12" />
-              )}
-            </div>
-            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-               <Icon icon="solar:camera-linear" className="text-white size-8" />
-            </div>
-            <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploadingAvatar} />
-          </label>
-          
-          {isEditingName ? (
-            <div className="flex flex-col items-center gap-3 w-full animate-in fade-in zoom-in-95">
-              <input
-                type="text"
-                placeholder="First Name"
-                value={editFirstName}
-                onChange={e => setEditFirstName(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-border bg-background text-sm font-bold text-center focus:outline-none focus:border-primary/50 transition-all"
-              />
-              <input
-                type="text"
-                placeholder="Last Name"
-                value={editLastName}
-                onChange={e => setEditLastName(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-border bg-background text-sm font-bold text-center focus:outline-none focus:border-primary/50 transition-all"
-              />
-              <div className="flex gap-2 w-full mt-2">
-                <button onClick={() => setIsEditingName(false)} className="flex-1 py-3 bg-secondary rounded-2xl font-bold text-sm">Cancel</button>
-                <button onClick={handleSaveName} disabled={savingName || !editFirstName} className="flex-1 py-3 bg-primary text-primary-foreground rounded-2xl font-bold text-sm shadow-sm">
-                  {savingName ? "..." : "Save"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <h2 className="font-heading text-2xl font-bold">
-                {profile?.first_name ? `${profile.first_name} ${profile.last_name ? profile.last_name.charAt(0) + "." : ""}`.trim() : "My Profile"}
-              </h2>
-              <button 
-                onClick={() => {
-                  setEditFirstName(profile?.first_name || "");
-                  setEditLastName(profile?.last_name || "");
-                  setIsEditingName(true);
-                }} 
-                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Icon icon="solar:pen-linear" className="size-5" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Cravelists */}
-        <div className="mb-10">
-          <div className="flex items-center gap-2 mb-4">
-            <Icon icon="solar:users-group-rounded-bold" className="text-primary size-5" />
-            <h3 className="font-heading text-lg font-bold">My Cravelists</h3>
-          </div>
-          
-          <div className="space-y-4">
-            {groups.map(g => (
-              <div key={g.id} className="bg-card rounded-[1.5rem] p-4 border border-border/50 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-4 min-w-0">
-                  <label className="relative group w-16 h-16 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden shadow-sm flex-shrink-0 bg-secondary" style={!g.avatar_url ? { background: getColor(g.name) } : {}}>
-                    {uploadingGroupAvatarId === g.id ? (
-                      <Icon icon="ph:spinner-gap-bold" className="animate-spin text-white size-6" />
-                    ) : g.avatar_url ? (
-                      <img src={g.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-2xl font-black text-white/90">
-                        {getInitials(g.name, null).replace("?", "✨")}
-                      </span>
-                    )}
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                       <Icon icon="solar:camera-linear" className="text-white size-6" />
-                    </div>
-                    <input type="file" accept="image/*" onChange={(e) => handleGroupAvatarUpload(g.id, e)} className="hidden" disabled={uploadingGroupAvatarId === g.id} />
-                  </label>
-
-                  <div className="min-w-0 pr-2">
-                    <h4 className="font-bold text-base mb-1 truncate">{g.name}</h4>
-                    <div className="flex -space-x-1.5">
-                      {g.group_members?.map((member, idx) => {
-                        const prof = member.profiles;
-                        const initialStr = getInitials(prof.first_name, prof.last_name);
-                        return (
-                          <div key={idx} className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black text-white border-2 border-card relative z-[10] overflow-hidden"
-                            style={{ background: prof.avatar_url ? 'transparent' : getColor(prof.first_name || prof.id), zIndex: 20 - idx }}>
-                            {prof.avatar_url ? (
-                              <img src={prof.avatar_url} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              initialStr
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[9px] font-bold text-muted-foreground mt-1 uppercase tracking-wider">
-                      Code: {g.share_code || "Private Link"}
-                    </p>
-                  </div>
-                </div>
-
-                {g.share_code && (
-                  <button type="button" onClick={() => handleCopy(g.share_code!)}
-                    className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl bg-secondary text-muted-foreground active:scale-95 transition-transform hover:text-foreground">
-                    {copiedCode === g.share_code ? <Icon icon="solar:check-read-linear" className="size-5 text-emerald-500" /> : <Icon icon="solar:copy-linear" className="size-5" />}
-                  </button>
-                )}
-              </div>
-            ))}
-            
-            {groups.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4 bg-secondary/50 rounded-2xl border border-dashed border-border">You aren't in any groups yet.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Join / Create */}
-        <div className="border-t border-border/50 pt-8 mb-10">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Join a Cravelist</p>
-          <div className="flex gap-3 mb-6">
-            <div className="flex-1 bg-input rounded-2xl border border-transparent focus-within:border-primary/30 transition-all">
-              <input type="text" value={joinCode} onChange={e => setJoinCode(e.target.value)} maxLength={6}
-                placeholder="ENTER 6-DIGIT CODE" 
-                className="w-full bg-transparent px-4 py-4 text-sm font-bold uppercase placeholder:text-muted-foreground/50 outline-none" 
-              />
-            </div>
-            <button disabled={joining || joinCode.length < 6} onClick={handleJoin}
-              className="px-8 bg-primary text-primary-foreground rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50">
-              {joining ? "..." : "Join"}
-            </button>
-          </div>
-
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4">Create New Cravelist</p>
-          <div className="flex gap-3">
-            <div className="flex-1 bg-input rounded-2xl border border-transparent focus-within:border-primary/30 transition-all">
-              <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
-                placeholder="EX: NYC TRIP 2026" 
-                className="w-full bg-transparent px-4 py-4 text-sm font-bold uppercase placeholder:text-muted-foreground/50 outline-none" 
-              />
-            </div>
-            <button disabled={creating || newGroupName.length < 3} onClick={handleCreate}
-              className="px-8 bg-foreground text-background rounded-2xl font-bold text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">
-              {creating ? "..." : "Create"}
-            </button>
-          </div>
-        </div>
-
-        {/* Sign Out & Delete */}
-        <div className="space-y-3">
-          <button type="button" onClick={handleSignOut}
-            className="w-full py-4 font-bold text-sm bg-secondary text-foreground rounded-2xl hover:bg-secondary/80 transition-colors">
-            Sign Out
-          </button>
-          <button type="button" onClick={() => setShowDeleteConfirm(true)} disabled={deleting}
-            className="w-full py-4 text-destructive font-bold text-sm bg-destructive/5 rounded-2xl hover:bg-destructive/10 transition-colors">
-            {deleting ? "Deleting..." : "Delete Account"}
-          </button>
-        </div>
-
-      </main>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-background/80 backdrop-blur-sm transition-opacity animate-in fade-in">
-          <div className="bg-card w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border border-border/50 scale-100 transition-transform animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4 mx-auto">
-              <Icon icon="solar:trash-bin-trash-bold" className="text-destructive size-8" />
-            </div>
-            <h3 className="text-xl font-heading font-black text-center mb-2">Delete Account?</h3>
-            <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-              Are you sure you want to completely delete your account? This will permanently wipe all your cravelists, reviews, and data. This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-3.5 rounded-2xl font-bold text-foreground bg-secondary active:scale-95 transition-all">
-                Cancel
-              </button>
-              <button onClick={confirmDelete}
-                className="flex-1 py-3.5 rounded-2xl font-bold text-destructive-foreground bg-destructive shadow-lg shadow-destructive/20 active:scale-95 transition-all">
-                Yes, Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error Modal */}
-      {errorModalMsg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-background/80 backdrop-blur-sm transition-opacity animate-in fade-in">
-          <div className="bg-card w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border border-border/50 scale-100 transition-transform animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4 mx-auto">
-              <Icon icon="solar:danger-triangle-bold" className="text-destructive size-8" />
-            </div>
-            <h3 className="text-xl font-heading font-black text-center mb-2">Oops!</h3>
-            <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-              {errorModalMsg}
-            </p>
-            <button onClick={() => setErrorModalMsg(null)}
-              className="w-full py-3.5 rounded-2xl font-bold text-foreground bg-secondary active:scale-95 transition-all">
-              OK
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    <Sheet title={`Invite to ${group.name}`} onClose={onClose}>
+      <p className="m-0 mb-4 text-sm text-muted">Anyone with this code can join and see everything on this list.</p>
+      <div className="mb-4 flex items-center justify-between rounded-2xl bg-subtle px-5 py-4">
+        <span className="font-mono text-[32px] font-semibold tracking-[0.2em]" aria-label={`Invite code ${code.split("").join(" ")}`}>{code}</span>
+        <button type="button" onClick={copy} aria-label="Copy code"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-surface">
+          {copied ? <Check size={18} className="text-mint-ink" /> : <Copy size={18} />}
+        </button>
+      </div>
+      <div className="pb-2">
+        <PrimaryButton onClick={share}><Share2 size={18} /> Share invite</PrimaryButton>
+      </div>
+      <p role="status" className="m-0 h-5 text-center text-xs text-mint-ink">{copied ? "Code copied" : ""}</p>
+    </Sheet>
   );
 }

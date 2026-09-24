@@ -1,42 +1,11 @@
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, Utensils, X } from "lucide-react";
+import { Camera, Loader2, X } from "lucide-react";
 import { getCurrentUserId, supabase } from "../lib/supabase";
-import { C } from "../constants/theme";
-import { Restaurant } from "../types";
+import type { Restaurant } from "../types";
 import { ScoreRating } from "./ScoreRating";
-
-// HTML5 Canvas Native Deep Compression Engine (Max 1280px / 82% JPEG Quality)
-async function compressImage(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const MAX_DIM = 1280;
-        let { width, height } = img;
-        if (width > height) {
-          if (width > MAX_DIM) { height = Math.round((height * MAX_DIM) / width); width = MAX_DIM; }
-        } else {
-          if (height > MAX_DIM) { width = Math.round((width * MAX_DIM) / height); height = MAX_DIM; }
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(file);
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => {
-          if (!blob) return resolve(file);
-          resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: Date.now() }));
-        }, "image/jpeg", 0.82);
-      };
-      img.onerror = (error) => reject(error);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-}
+import { PrimaryButton, Sheet } from "./ui";
+import { compressImage } from "../lib/images";
 
 async function uploadVisitPhoto(file: File): Promise<string> {
   const compressed = await compressImage(file);
@@ -60,6 +29,7 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
   
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -90,6 +60,7 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
 
   const handleSave = async () => {
     setSaving(true);
+    setError(null);
     try {
       // 1. Permanently delete requested remote photos from the Supabase Disk Space specifically to save room natively
       if (deletedUrls.length > 0) {
@@ -99,7 +70,6 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
         }).filter(Boolean) as string[];
         
         if (fileNames.length > 0) {
-          console.log("Emptying from bucket...", fileNames);
           await supabase.storage.from("photos").remove(fileNames);
         }
       }
@@ -146,96 +116,85 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
       onClose();
     } catch (err) {
       console.error("RateSheet: save failed", err);
+      setError("Couldn't save your rating. Check your connection and try again.");
     } finally {
       setSaving(false);
     }
   };
 
+  const photoCount = existingUrls.length + localFiles.length;
+  const isEdit = restaurant.userScore != null;
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-t-3xl p-6 pb-safe-or-6 bg-white" onClick={(e) => e.stopPropagation()}>
-        <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-5" />
-        <div className="flex items-center gap-3 mb-6">
-          {restaurant.photoUrl ? (
-            <img src={restaurant.photoUrl} alt={restaurant.name} className="w-14 h-14 rounded-2xl object-cover" />
-          ) : (
-            <div className="w-14 h-14 rounded-2xl bg-rose-50 flex items-center justify-center"><Utensils size={20} className="text-rose-400" /></div>
-          )}
-          <div>
-            <h3 className="font-bold text-slate-800 text-lg">{restaurant.name}</h3>
-            <p className="text-sm text-slate-400">{restaurant.visited ? "Update your rating" : "How was it?"}</p>
-          </div>
+    <Sheet onClose={onClose} labelledBy="rate-title">
+      <div className="mb-5 flex items-center gap-3">
+        <span className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-subtle">
+          {restaurant.photoUrl && <img src={restaurant.photoUrl} alt="" className="h-full w-full object-cover" />}
+        </span>
+        <div className="min-w-0">
+          <h2 id="rate-title" className="m-0 truncate font-display text-2xl font-bold tracking-[-0.02em]">{restaurant.name}</h2>
+          <p className="m-0 text-sm text-muted">{isEdit ? "Update your rating" : "How was it?"}</p>
         </div>
-
-        {/* Horizontal Scroll Multi-Photo Upload Area */}
-        <div className="mb-5">
-          <label className="flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-widest mb-3">
-            <span>Your Photos</span>
-            <span className="text-slate-300 font-bold">{existingUrls.length + localFiles.length} selected</span>
-          </label>
-          <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
-          
-          <div className="flex gap-3 overflow-x-auto scrollbar-none pb-2 -mx-2 px-2">
-            {/* The giant Add Photo Button */}
-            <button type="button" onClick={() => fileInputRef.current?.click()}
-              className="flex-shrink-0 w-[120px] h-[160px] rounded-3xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400 active:bg-slate-50 transition-colors bg-white hover:border-slate-300">
-              <Camera size={26} strokeWidth={1.5} />
-              <span className="text-[11px] font-black uppercase tracking-wider text-center px-2 leading-tight">Add<br/>Photo</span>
-            </button>
-            
-            {/* Existing Remote Previews */}
-            {existingUrls.map(url => (
-              <div key={url} className="relative flex-shrink-0 w-[120px] h-[160px] rounded-3xl overflow-hidden shadow-sm border border-slate-100 group">
-                <img src={url} alt="Visit photo" className="w-full h-full object-cover" />
-                <button type="button" onClick={() => removeExistingPhoto(url)}
-                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white scale-95 active:scale-90 transition-all border border-black/10">
-                  <X size={14} strokeWidth={3} />
-                </button>
-              </div>
-            ))}
-            
-            {/* New Local Previews */}
-            {localFiles.map(local => (
-              <div key={local.id} className="relative flex-shrink-0 w-[120px] h-[160px] rounded-3xl overflow-hidden shadow-md shadow-rose-100 border-2 border-rose-100 group">
-                <img src={local.preview} alt="New upload" className="w-full h-full object-cover" />
-                <button type="button" onClick={() => removeLocalPhoto(local.id)}
-                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white scale-95 active:scale-90 transition-all border border-black/10">
-                  <X size={14} strokeWidth={3} />
-                </button>
-                <div className="absolute top-2 left-2 px-2 py-1 rounded bg-rose-500 text-white text-[9px] font-black uppercase tracking-wider shadow-sm">New</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Thoughts?</label>
-          <textarea 
-            value={notes} 
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="What did you think of the food or vibe?"
-            className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-400 transition-all resize-none h-24"
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 text-center">Score</label>
-          <ScoreRating value={score} onChange={setScore} />
-        </div>
-        {score > 0 && (
-          <div className="text-center mb-4">
-            <span className="text-3xl font-black" style={{ color: score <= 3 ? C.rose : score <= 5 ? "#F97316" : score <= 7 ? C.amber : score <= 9 ? "#84CC16" : C.emerald }}>
-              {score}
-            </span>
-            <span className="text-lg font-bold text-slate-300">/10</span>
-          </div>
-        )}
-        <button type="button" onClick={handleSave} disabled={saving || uploading || score === 0}
-          className="w-full py-4 rounded-2xl font-bold text-white text-sm disabled:opacity-40 transition-all shadow-lg shadow-rose-200"
-          style={{ background: C.rose }}>
-          {uploading ? "Uploading photo..." : saving ? "Saving..." : restaurant.visited ? "Update Rating" : "Mark as Tried"}
-        </button>
       </div>
-    </div>
+
+      <fieldset className="m-0 mb-5 border-0 p-0">
+        <legend className="mb-2.5 text-[13px] font-medium text-ink-2">Your score</legend>
+        <ScoreRating value={score} onChange={setScore} />
+      </fieldset>
+
+      <label className="mb-5 block">
+        <span className="mb-1.5 block text-[13px] font-medium text-ink-2">Notes</span>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="What did you order? Would you go back?"
+          rows={3}
+          className="w-full resize-none rounded-2xl border border-border bg-surface p-3.5 text-[15px] outline-none placeholder:text-muted focus:border-accent"
+        />
+      </label>
+
+      <div className="mb-6">
+        <div className="mb-2 flex items-center justify-between text-[13px] font-medium text-ink-2">
+          <span>Photos</span>
+          {photoCount > 0 && <span className="font-mono text-xs text-muted">{photoCount}</span>}
+        </div>
+        <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+        <div className="-mx-5 flex gap-2 overflow-x-auto px-5">
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-border-strong text-muted">
+            <Camera size={20} />
+            <span className="text-[11px] font-medium">Add</span>
+          </button>
+          {existingUrls.map((url) => (
+            <Thumb key={url} src={url} onRemove={() => removeExistingPhoto(url)} />
+          ))}
+          {localFiles.map((local) => (
+            <Thumb key={local.id} src={local.preview} onRemove={() => removeLocalPhoto(local.id)} />
+          ))}
+        </div>
+      </div>
+
+      {error && <p role="alert" className="m-0 mb-3 text-center text-sm font-medium text-danger">{error}</p>}
+
+      <div className="pb-2">
+        <PrimaryButton onClick={handleSave} disabled={saving || uploading || score === 0}
+          tone={score > 0 ? "accent" : "ink"}>
+          {(saving || uploading) && <Loader2 size={18} className="animate-spin" />}
+          {uploading ? "Uploading photos…" : saving ? "Saving…" : score === 0 ? "Pick a score" : isEdit ? "Save changes" : "Mark as tried"}
+        </PrimaryButton>
+      </div>
+    </Sheet>
+  );
+}
+
+function Thumb({ src, onRemove }: { src: string; onRemove: () => void }) {
+  return (
+    <span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-subtle">
+      <img src={src} alt="" className="h-full w-full object-cover" />
+      <button type="button" onClick={onRemove} aria-label="Remove photo"
+        className="absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded-full bg-ink/70 text-white">
+        <X size={14} />
+      </button>
+    </span>
   );
 }

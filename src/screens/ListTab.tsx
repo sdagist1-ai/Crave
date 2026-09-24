@@ -1,318 +1,274 @@
-import { useState, useEffect, useRef } from "react";
-import { Icon } from "@iconify/react";
+import { useEffect, useRef, useState } from "react";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
+import { Check, ChevronDown, Loader2, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import type { Group, Restaurant, SortOption } from "../types";
+import { fetchRestaurants } from "../lib/restaurants";
+import { useDebounce } from "../hooks/useDebounce";
+import { CATEGORIES, SORT_LABELS, VIBE_OPTIONS } from "../constants/theme";
 import { RestaurantCard, RestaurantCardSkeleton } from "../components/RestaurantCard";
-import { Restaurant, SortOption, Group } from "../types";
-import { VIBE_OPTIONS, SORT_LABELS } from "../constants/theme";
+import { AvatarStack, Eyebrow, FilterChip, Glow, PrimaryButton, Segmented, Sheet } from "../components/ui";
 
-export function ListTab({ 
-  restaurants, 
-  onOpenSearch, 
-  onDetail,
-  fetchNextPage,
-  hasNextPage,
-  isFetchingNextPage,
-  isLoading,
-  filterTab,
-  setFilterTab,
-  filterCategory,
-  setFilterCategory,
-  filterVibes,
-  setFilterVibes,
-  sortBy,
-  setSortBy,
-  activeGroup,
-  groups,
-  setActiveGroupId,
-  showWorkspaceDropdown,
-  setShowWorkspaceDropdown
-}: {
-  restaurants: Restaurant[]; 
-  onOpenSearch: () => void; 
-  onDetail: (r: Restaurant) => void;
-  fetchNextPage: () => void;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  isLoading: boolean;
-  filterTab: "cravelist" | "tried";
-  setFilterTab: (t: "cravelist" | "tried") => void;
-  filterCategory: string | null;
-  setFilterCategory: (c: string | null) => void;
-  filterVibes: string[];
-  setFilterVibes: (v: string[]) => void;
-  sortBy: SortOption;
-  setSortBy: (s: SortOption) => void;
-  activeGroup?: Group;
+type Tab = "cravelist" | "tried";
+
+export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
+  uid: string;
+  group: Group | undefined;
   groups: Group[];
-  setActiveGroupId: (id: string) => void;
-  showWorkspaceDropdown: boolean;
-  setShowWorkspaceDropdown: (show: boolean) => void;
+  onSelectGroup: (id: string) => void;
+  /** Open "add a place", optionally pre-filled with a search */
+  onAdd: (query?: string) => void;
+  onOpen: (r: Restaurant) => void;
 }) {
-  const [showSortMenu, setShowSortMenu] = useState(false);
-  const observerTarget = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState<Tab>("cravelist");
+  const [category, setCategory] = useState<string | null>(null);
+  const [vibes, setVibes] = useState<string[]>([]);
+  const [sort, setSort] = useState<SortOption>("newest");
+  const [query, setQuery] = useState("");
+  const search = useDebounce(query.trim(), 250);
+  const [showSwitcher, setShowSwitcher] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
+  const feed = useInfiniteQuery({
+    queryKey: ["restaurants", "feed", uid, group?.id, tab, category, vibes, sort, search],
+    queryFn: ({ pageParam }) => fetchRestaurants({
+      uid, groupId: group!.id, pageParam, filterTab: tab, filterCategory: category,
+      filterVibes: vibes, sortBy: sort, search,
+    }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: !!group,
+    placeholderData: keepPreviousData,
+  });
+  const restaurants = feed.data?.pages.flatMap((p) => p.restaurants) ?? [];
+
+  // Infinite scroll. Re-observe whenever a page lands so a sentinel that is
+  // still on screen triggers the next page.
+  const sentinel = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
+    const node = sentinel.current;
+    if (!node || !hasNextPage || isFetchingNextPage) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) fetchNextPage();
+    }, { rootMargin: "400px" });
+    observer.observe(node);
     return () => observer.disconnect();
-  }, [observerTarget, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, restaurants.length]);
 
-  const PRIMARY_CATEGORIES = [
-    { id: "Restaurants", label: "Restaurants", icon: "solar:chef-hat-linear" },
-    { id: "Breakfast & Brunch", label: "Breakfast", icon: "solar:sun-2-linear" },
-    { id: "Coffee & Tea", label: "Coffee", icon: "solar:cup-hot-linear" },
-    { id: "Bars", label: "Bars", icon: "solar:wineglass-linear" },
-    { id: "Bakeries", label: "Bakeries", icon: "fluent-emoji:croissant" },
-    { id: "Ice Cream & Dessert", label: "Sweets", icon: "fluent-emoji:ice-cream" },
-  ];
+  const memberCount = group?.members.length ?? 1;
+  const triedCount = group?.tried_count ?? 0;
+  const cravelistCount = (group?.place_count ?? 0) - triedCount;
+  const filtersActive = sort !== "newest" || vibes.length > 0;
+  const anyFilter = filtersActive || !!category || !!search;
 
-  const filtered = restaurants;
-
-  const toggleVibe = (v: string) => setFilterVibes(filterVibes.includes(v) ? filterVibes.filter((x) => x !== v) : [...filterVibes, v]);
-
-  const getGroupColor = (str: string) => {
-    const colors = ["#ff453a", "#ff9f0a", "#32ade6", "#0a84ff", "#af52de", "#ff375f", "#34c759"];
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
-
-  const getGroupInitials = (name: string) => {
-    const parts = name.split(" ").filter(p => p.length > 0);
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return "✨";
-  };
+  const clearFilters = () => { setCategory(null); setVibes([]); setSort("newest"); setQuery(""); };
 
   return (
-    <div className="flex-1 flex flex-col font-sans overflow-hidden bg-background text-foreground">
-      <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-md px-4 pt-safe-or-4 pb-4 flex items-center justify-between gap-3 border-b border-border/50">
-        <div className="relative">
-          <button 
+    <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
+      <Glow side="right" />
+
+      <div className="relative flex flex-col gap-[18px] px-5 pt-safe">
+        {/* Top row: list switcher + add */}
+        <div className="flex items-center justify-between pt-2">
+          <button
             type="button"
-            onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
-            className="flex items-center gap-2 bg-secondary/50 hover:bg-secondary rounded-full py-1.5 pl-1.5 pr-3 transition-colors shrink-0"
+            onClick={() => setShowSwitcher(true)}
+            className="flex min-h-11 items-center gap-2.5 rounded-full border border-border bg-surface py-1.5 pr-3.5 pl-1.5 text-left"
+            aria-haspopup="dialog"
           >
-            {activeGroup?.avatar_url ? (
-              <img
-                src={activeGroup.avatar_url}
-                alt={activeGroup.name}
-                className="w-8 h-8 rounded-full object-cover shadow-sm"
-              />
-            ) : (
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm"
-                style={{ background: getGroupColor(activeGroup?.name || "Workspace"), color: "#fff" }}
-              >
-                <span className="text-[11px] font-black tracking-wider">
-                  {getGroupInitials(activeGroup?.name || "W")}
-                </span>
-              </div>
-            )}
-            <span className="font-semibold text-sm max-w-[140px] truncate">{activeGroup?.name || "Workspace"}</span>
-            <Icon icon="solar:alt-arrow-down-linear" className="text-muted-foreground" />
+            <AvatarStack people={group?.members ?? []} max={3} size={30} />
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="max-w-[150px] truncate text-[15px] font-semibold">{group?.name ?? "Cravelist"}</span>
+              <span className="text-[11px] font-medium text-muted">
+                {memberCount} {memberCount === 1 ? "member" : "members"}
+              </span>
+            </span>
+            <ChevronDown size={14} className="text-muted" aria-hidden="true" />
           </button>
-          
-          {showWorkspaceDropdown && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowWorkspaceDropdown(false)} />
-              <div className="absolute top-[calc(100%+12px)] left-0 w-[240px] bg-card rounded-[2rem] shadow-2xl shadow-foreground/10 border border-border/50 p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <p className="text-[10px] font-black tracking-widest text-muted-foreground uppercase px-4 py-2 mb-1">Switch Cravelist</p>
-                <div className="space-y-1">
-                  {groups?.map(g => {
-                    const isActive = activeGroup?.id === g.id;
-                    return (
-                      <button
-                        key={g.id}
-                        onClick={() => { setActiveGroupId(g.id); setShowWorkspaceDropdown(false); }}
-                        className={`w-full text-left px-3 py-3 rounded-2xl transition-all flex items-center gap-3 ${isActive ? "bg-primary/10" : "hover:bg-secondary"}`}
-                      >
-                        {g.avatar_url ? (
-                          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 shadow-sm border border-border">
-                            <img src={g.avatar_url} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div 
-                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-                            style={{ background: getGroupColor(g.name), color: "#fff" }}
-                          >
-                            <span className="text-[13px] font-black tracking-wider">{getGroupInitials(g.name)}</span>
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                            <span className={`truncate block text-[15px] font-bold ${isActive ? "text-primary" : "text-foreground"}`}>{g.name}</span>
-                        </div>
-                        {isActive && <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 ml-1 bg-primary" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => onAdd()}
+            aria-label="Add a restaurant"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-white shadow-accent transition-transform active:scale-95"
+          >
+            <Plus size={20} strokeWidth={2.6} />
+          </button>
         </div>
-        <div className="relative flex-1" onClick={onOpenSearch}>
-          <Icon
-            icon="solar:magnifer-linear"
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground size-5"
-          />
+
+        <div className="flex flex-col gap-1">
+          <Eyebrow>
+            <span className="tabular">{group?.place_count ?? 0}</span> saved · <span className="tabular">{triedCount}</span> tried
+          </Eyebrow>
+          <h1 className="m-0 font-display text-[44px] leading-none font-extrabold tracking-[-0.03em]">
+            What are we<br />craving?
+          </h1>
+        </div>
+
+        {/* Search within the list + filters */}
+        <div className="flex h-[50px] items-center gap-2.5 rounded-2xl border border-border bg-surface pr-1.5 pl-3.5 focus-within:border-accent">
+          <Search size={18} className="shrink-0 text-muted" aria-hidden="true" />
+          <label htmlFor="list-search" className="sr-only">Search this Cravelist</label>
           <input
-            type="text"
-            placeholder="Find or Add..."
-            readOnly
-            className="w-full bg-secondary border border-transparent rounded-full pl-11 pr-4 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground outline-none cursor-pointer hover:bg-secondary/80 transition-colors"
+            id="list-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search spots, dishes, vibes…"
+            enterKeyHint="search"
+            className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
           />
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-y-auto pb-24">
-        <div className="px-4 mb-5 pt-4">
-          <div className="flex p-1 bg-secondary/70 rounded-full">
-            {(["cravelist", "tried"] as const).map((tab) => {
-              const isActive = filterTab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setFilterTab(tab)}
-                  className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all capitalize ${
-                    isActive
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {tab === "cravelist" ? "Cravelist" : tab}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="px-4 mb-6">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
-            {PRIMARY_CATEGORIES.map((cat) => {
-              const isActive = filterCategory === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setFilterCategory(isActive ? null : cat.id)}
-                  className={`snap-start shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium shadow-sm transition-all ${
-                    isActive
-                      ? "border-primary text-primary bg-primary/10"
-                      : "border-border bg-card hover:border-primary hover:text-primary"
-                  }`}
-                >
-                  <Icon icon={cat.icon} width={16} height={16} />
-                  {cat.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-between mt-3">
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              {VIBE_OPTIONS.map((vibe) => {
-                const isActive = filterVibes.includes(vibe.label);
-                return (
-                  <button
-                    key={vibe.label}
-                    type="button"
-                    onClick={() => toggleVibe(vibe.label)}
-                    className={`whitespace-nowrap px-4 py-1.5 rounded-full border text-xs font-semibold shadow-sm transition-all ${
-                      isActive
-                        ? "border-accent-foreground/20 bg-accent text-accent-foreground"
-                        : "border-border bg-card text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {vibe.label}
-                  </button>
-                );
-              })}
-            </div>
-            
-            <div className="relative flex-shrink-0 ml-2">
-              <button
-                type="button"
-                onClick={() => setShowSortMenu(!showSortMenu)}
-                className={`w-8 h-8 flex items-center justify-center rounded-full border shadow-sm transition-all ${
-                  sortBy !== "newest"
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Icon icon="solar:tuning-linear" width={16} height={16} />
-              </button>
-              {showSortMenu && (
-                <div className="absolute right-0 top-full mt-2 bg-card rounded-2xl shadow-xl border border-border z-20 min-w-[140px] overflow-hidden flex flex-col">
-                  {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => { setSortBy(opt); setShowSortMenu(false); }}
-                      className={`w-full text-left px-4 py-3 text-xs font-bold transition-colors ${
-                        sortBy === opt ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary"
-                      }`}
-                    >
-                      {SORT_LABELS[opt]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 flex flex-col gap-4 pb-8">
-          {isLoading ? (
-            <div className="flex flex-col gap-4">
-              {[1, 2, 3, 4, 5].map((idx) => (
-                <RestaurantCardSkeleton key={idx} />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="bg-secondary w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Icon icon="solar:magnifer-linear" className="text-muted-foreground size-8" />
-              </div>
-              <h3 className="text-base font-bold text-foreground mb-1">
-                {restaurants.length === 0 ? "Start your list" : "No matches"}
-              </h3>
-              <p className="text-sm text-muted-foreground max-w-[240px]">
-                {restaurants.length === 0 ? "Search for restaurants you want to try" : "Adjust your filters"}
-              </p>
-              {restaurants.length === 0 && (
-                <button
-                  type="button"
-                  onClick={onOpenSearch}
-                  className="mt-5 px-6 py-3 rounded-2xl text-sm font-bold bg-primary text-primary-foreground shadow-lg shadow-primary/20 active:scale-95 transition-transform"
-                >
-                  Find a restaurant
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              {filtered.map((r) => (
-                <RestaurantCard key={r.id} restaurant={r} onDetail={onDetail} />
-              ))}
-              <div ref={observerTarget} className="h-4 w-full flex items-center justify-center pt-2">
-                {isFetchingNextPage && <Icon icon="ph:spinner-gap-bold" className="animate-spin text-muted-foreground size-5" />}
-              </div>
-            </>
+          {query && (
+            <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted active:bg-subtle">
+              {feed.isFetching && search ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+            </button>
           )}
+          <button
+            type="button"
+            onClick={() => setShowFilters(true)}
+            aria-label={filtersActive ? "Sort and filter (active)" : "Sort and filter"}
+            className={`relative flex h-9 w-9 items-center justify-center rounded-xl border ${filtersActive ? "border-accent bg-accent-soft text-accent-ink" : "border-border text-muted"}`}
+          >
+            <SlidersHorizontal size={16} />
+          </button>
         </div>
-      </main>
+
+        <Segmented<Tab>
+          value={tab}
+          onChange={setTab}
+          options={[
+            { id: "cravelist", label: "Cravelist", count: Math.max(0, cravelistCount) },
+            { id: "tried", label: "Tried", count: triedCount },
+          ]}
+        />
+
+        <div className="-mx-5 flex gap-2 overflow-x-auto px-5">
+          <FilterChip active={!category} onClick={() => setCategory(null)}>All</FilterChip>
+          {CATEGORIES.map((c) => (
+            <FilterChip key={c.id} active={category === c.id} onClick={() => setCategory(category === c.id ? null : c.id)}>
+              {c.label}
+            </FilterChip>
+          ))}
+        </div>
+      </div>
+
+      {/* The list */}
+      <div className={`relative flex flex-col gap-3 px-5 pt-[18px] transition-opacity ${feed.isPlaceholderData ? "opacity-60" : ""}`}>
+        {feed.isPending ? (
+          [0, 1, 2, 3].map((i) => <RestaurantCardSkeleton key={i} />)
+        ) : feed.isError && restaurants.length === 0 ? (
+          <EmptyState
+            title="Couldn't load your list"
+            body="Check your connection and try again."
+            action={<PrimaryButton onClick={() => feed.refetch()} block={false}>Try again</PrimaryButton>}
+          />
+        ) : restaurants.length === 0 ? (
+          search ? (
+            <EmptyState
+              title={`No saved spots match "${search}"`}
+              body="Want to find it and add it to this list?"
+              action={<PrimaryButton onClick={() => onAdd(search)} block={false}>Search for "{search}"</PrimaryButton>}
+            />
+          ) : (group?.place_count ?? 0) === 0 ? (
+            <EmptyState
+              title="Start your Cravelist"
+              body="Save the places you want to try. Everyone in this list sees them."
+              action={<PrimaryButton onClick={() => onAdd()} block={false}><Plus size={18} /> Add a place</PrimaryButton>}
+            />
+          ) : anyFilter ? (
+            <EmptyState
+              title="Nothing matches"
+              body="Try another category or clear your filters."
+              action={<button type="button" onClick={clearFilters} className="h-11 rounded-full px-4 text-sm font-semibold text-accent-ink">Clear filters</button>}
+            />
+          ) : (
+            <EmptyState
+              title={tab === "tried" ? "Nothing tried yet" : "Everything's been tried"}
+              body={tab === "tried" ? "Rate a place after you visit and it lands here." : "Add somewhere new to keep the list going."}
+            />
+          )
+        ) : (
+          <>
+            {restaurants.map((r) => (
+              <RestaurantCard key={r.id} restaurant={r} memberCount={memberCount} onOpen={onOpen} />
+            ))}
+            <div ref={sentinel} className="flex h-10 items-center justify-center" aria-hidden="true">
+              {feed.isFetchingNextPage && <Loader2 size={18} className="animate-spin text-muted" />}
+            </div>
+          </>
+        )}
+      </div>
+
+      {showSwitcher && (
+        <Sheet title="Your Cravelists" onClose={() => setShowSwitcher(false)}>
+          <div className="flex flex-col gap-1 pb-2">
+            {groups.map((g) => {
+              const active = g.id === group?.id;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => { onSelectGroup(g.id); setShowSwitcher(false); }}
+                  className={`flex items-center gap-3 rounded-2xl p-3 text-left ${active ? "bg-accent-tint" : "active:bg-subtle"}`}
+                  aria-current={active ? "true" : undefined}
+                >
+                  <AvatarStack people={g.members} max={3} size={32} />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[15px] font-semibold">{g.name}</span>
+                    <span className="text-xs text-muted">
+                      {g.members.length} {g.members.length === 1 ? "member" : "members"} · {g.place_count} spots
+                    </span>
+                  </span>
+                  {active && <Check size={18} className="text-accent" aria-label="Current list" />}
+                </button>
+              );
+            })}
+          </div>
+        </Sheet>
+      )}
+
+      {showFilters && (
+        <Sheet title="Sort & filter" onClose={() => setShowFilters(false)}>
+          <fieldset className="m-0 mb-5 border-0 p-0">
+            <legend className="mb-2 text-[13px] font-medium text-ink-2">Sort by</legend>
+            <div className="flex flex-col gap-1">
+              {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
+                <label key={opt} className={`flex min-h-12 items-center justify-between rounded-2xl px-4 ${sort === opt ? "bg-accent-tint" : ""}`}>
+                  <span className="text-[15px]">{SORT_LABELS[opt]}</span>
+                  <input type="radio" name="sort" value={opt} checked={sort === opt} onChange={() => setSort(opt)}
+                    className="h-5 w-5 accent-[#ff453a]" />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="m-0 mb-6 border-0 p-0">
+            <legend className="mb-2 text-[13px] font-medium text-ink-2">Vibe</legend>
+            <div className="flex gap-2">
+              {VIBE_OPTIONS.map((v) => (
+                <FilterChip key={v} active={vibes.includes(v)}
+                  onClick={() => setVibes(vibes.includes(v) ? vibes.filter((x) => x !== v) : [...vibes, v])}>
+                  {v}
+                </FilterChip>
+              ))}
+            </div>
+          </fieldset>
+          <div className="flex gap-2 pb-2">
+            <button type="button" onClick={() => { setSort("newest"); setVibes([]); }}
+              className="h-[54px] flex-1 rounded-[18px] border border-border text-[15px] font-semibold">Reset</button>
+            <PrimaryButton onClick={() => setShowFilters(false)} className="flex-1">Done</PrimaryButton>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center px-6 py-12 text-center animate-rise">
+      <h2 className="m-0 mb-1.5 font-display text-2xl font-bold tracking-[-0.02em]">{title}</h2>
+      <p className="m-0 mb-5 max-w-[260px] text-sm text-muted">{body}</p>
+      {action}
     </div>
   );
 }
