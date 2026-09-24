@@ -142,7 +142,7 @@ export function PassportTab({ uid, group, onOpen }: {
             No stamps yet. Rate a place after you visit and it lands here.
           </p>
         ) : (
-          <div className="-mx-5 flex gap-3 overflow-x-auto px-5 pt-4 pb-3">
+          <div className="-mx-5 flex gap-4 overflow-x-auto px-5 pt-4 pb-3">
             {stamps.slice(0, 12).map((r, i) => (
               <Stamp key={r.id} r={r} index={i} onOpen={onOpen} />
             ))}
@@ -193,16 +193,18 @@ function Stamp({ r, index, onOpen, fluid = false }: { r: Restaurant; index: numb
       style={{ transform: `rotate(${STAMP_TILT[index % STAMP_TILT.length]}deg)` }}
       aria-label={`${r.name}, ${where ? `${where.toLowerCase()}, ` : ""}${date}${score != null ? `, scored ${formatScore(score)}` : ""}${must ? ", a must" : ""}`}
     >
-      <span className="flex flex-1 flex-col gap-1.5 rounded-[12px] border border-dashed px-2.5 py-2.5"
+      {/* min-w-0: a long neighbourhood must truncate, not widen the stamp past its border. */}
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-[12px] border border-dashed px-2.5 py-2.5"
         style={{ borderColor: "color-mix(in srgb, currentColor 55%, transparent)" }}>
-        <span className="flex items-center justify-between gap-1 font-mono text-[9px] tracking-[0.12em]">
+        {/* Flag first, and room on the right for the MUST seal. */}
+        <span className={`flex min-w-0 items-center gap-1 font-mono text-[9px] tracking-[0.12em] ${must ? "pr-6" : ""}`}>
+          {flagOf(r.countryCode) && <span className="shrink-0 text-xs">{flagOf(r.countryCode)}</span>}
           <span className="truncate">{where || "VISITED"}</span>
-          <span className="text-xs">{flagOf(r.countryCode)}</span>
         </span>
         <span className="line-clamp-2 font-display text-[15px] leading-[1.1] font-extrabold text-ink">{r.name}</span>
         <span className="mt-auto flex items-end justify-between gap-1">
-          <span className="font-mono text-[9px] leading-tight tracking-[0.06em]">{date}</span>
-          {score != null && <span className="font-mono text-lg leading-none font-semibold text-ink tabular">{formatScore(score)}</span>}
+          <span className="min-w-0 font-mono text-[9px] leading-tight tracking-[0.06em]">{date}</span>
+          {score != null && <span className="shrink-0 font-mono text-lg leading-none font-semibold text-ink tabular">{formatScore(score)}</span>}
         </span>
       </span>
       {must && (
