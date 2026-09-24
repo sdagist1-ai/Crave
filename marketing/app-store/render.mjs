@@ -1,6 +1,7 @@
 // Renders App Store screenshots from device screenshots and the copy in slides.json.
 //   node render.mjs            iPhone 6.9" (1290×2796) from screens/*        → app-store-assets/v2/
 //   node render.mjs --ipad     iPad 13"    (2064×2752) from screens/ipad/*   → app-store-assets/v2/ipad/
+//   node render.mjs --6.5      iPhone 6.5" (1284×2778) from screens/*        → app-store-assets/v2/iphone-6.5/
 // Add screen names (e.g. 3-spin) to render only those slides.
 // Needs Playwright with a Chromium: `npm i -D playwright && npx playwright install chromium`.
 import { chromium } from "playwright";
@@ -12,7 +13,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../..");
 const args = process.argv.slice(2);
 const ipad = args.includes("--ipad");
-const out = resolve(root, "app-store-assets/v2", ipad ? "ipad" : "");
+const small = !ipad && args.includes("--6.5");
+const out = resolve(root, "app-store-assets/v2", ipad ? "ipad" : small ? "iphone-6.5" : "");
 const shots = resolve(here, "screens", ipad ? "ipad" : "");
 mkdirSync(out, { recursive: true });
 const font = (pkg, file) => pathToFileURL(resolve(root, "node_modules/@fontsource-variable", pkg, "files", file)).href;
@@ -22,7 +24,7 @@ const only = args.filter((a) => !a.startsWith("--"));
 
 // Everything below is laid out for the iPhone canvas; the iPad one scales it by `k`
 // and swaps the phone frame for a tablet frame.
-const W = ipad ? 2064 : 1290, H = ipad ? 2752 : 2796, k = ipad ? 1.35 : 1;
+const W = ipad ? 2064 : small ? 1284 : 1290, H = ipad ? 2752 : small ? 2778 : 2796, k = ipad ? 1.35 : 1;
 const device = ipad
   ? { width: 1560, pad: 30, radius: 90, inner: 62, island: false }
   : { width: 980, pad: 26, radius: 150, inner: 124, island: true };
