@@ -94,6 +94,9 @@
   .tabular { font-variant-numeric: tabular-nums; }
 }
 
+/* Side padding that keeps full-width screens to a centred 42rem column on iPad. */
+.px-page { padding-inline: max(1.25rem, calc(50% - 21rem)); }
+
 /* Safe areas (notch / home indicator) */
 .pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 16px); }
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }

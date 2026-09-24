@@ -105,7 +105,7 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
-      <div className="flex flex-col gap-1 px-5 pt-safe">
+      <div className="mx-auto w-full max-w-2xl flex flex-col gap-1 px-5 pt-safe">
         <Eyebrow className="pt-2">
           {pool.isPending ? "Loading the pool…"
             : mode === "new" ? `${places.length} ${places.length === 1 ? "spot" : "spots"} on the cravelist`
@@ -161,7 +161,7 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 px-5">
+      <div className="mx-auto w-full max-w-2xl flex flex-col gap-3 px-5">
         <Segmented<Mode>
           size="lg"
           value={mode}

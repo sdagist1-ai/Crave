@@ -102,7 +102,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
   return (
     <div role="dialog" aria-modal="true" aria-label={r.name} className="fixed inset-0 z-50 overflow-y-auto bg-background animate-rise">
       {/* Hero */}
-      <div className="relative h-[250px] shrink-0 bg-sun-soft">
+      <div className="relative h-[250px] shrink-0 bg-sun-soft md:h-[380px]">
         {r.photoUrl ? (
           <button type="button" onClick={() => setViewer(0)} className="block h-full w-full" aria-label="View photos">
             <img src={r.photoUrl} alt="" className="h-full w-full object-cover" />
@@ -113,7 +113,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
           </div>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-background/0 to-background" />
-        <div className="absolute inset-x-5 top-0 flex justify-between pt-safe">
+        <div className="absolute inset-x-5 top-0 mx-auto flex max-w-2xl justify-between pt-safe">
           <button type="button" onClick={onClose} aria-label="Back"
             className="mt-2 flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-ink backdrop-blur-md">
             <ChevronLeft size={22} strokeWidth={2.2} />
@@ -136,7 +136,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
         )}
       </div>
 
-      <div className="relative -mt-10 flex flex-col gap-3.5 px-5 pb-12">
+      <div className="relative mx-auto -mt-10 flex w-full max-w-2xl flex-col gap-3.5 px-5 pb-12">
         {/* Title block */}
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-1.5">

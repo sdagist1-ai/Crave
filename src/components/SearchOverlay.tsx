@@ -134,7 +134,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
           <span className="mt-2 text-[15px] font-semibold">Add to {listName}</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6">
+        <div className="flex-1 overflow-y-auto px-page pt-4 pb-6">
           <h1 className="m-0 mb-2 font-display text-[32px] leading-none font-extrabold tracking-[-0.03em]">{place.name}</h1>
           <p className="m-0 mb-3 text-sm text-muted">
             {[formatPrimaryType(place.primaryType), place.address].filter(Boolean).join(" · ")}
@@ -165,7 +165,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
           </label>
         </div>
 
-        <div className="border-t border-border bg-background px-5 pt-3 pb-safe">
+        <div className="border-t border-border bg-background px-page pt-3 pb-safe">
           {saveError && <p role="alert" className="m-0 mb-2 text-center text-sm font-medium text-danger">{saveError}</p>}
           <PrimaryButton onClick={save} disabled={saving || vibes.length === 0} tone="accent">
             {saving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} strokeWidth={2.6} />}
@@ -180,7 +180,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   // ─── Step 1: search Google ────────────────────────────────────────────────
   return (
     <div role="dialog" aria-modal="true" aria-label="Add a place" className="fixed inset-0 z-50 flex flex-col bg-background animate-fade-in">
-      <div className="flex flex-col gap-3 border-b border-border px-5 pt-safe pb-3">
+      <div className="flex flex-col gap-3 border-b border-border px-page pt-safe pb-3">
         <div className="flex items-center justify-between pt-2">
           <h1 className="m-0 font-display text-[28px] font-extrabold tracking-[-0.03em]">Add a place</h1>
           <button type="button" onClick={onClose} aria-label="Close"
@@ -205,7 +205,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
 
       {locationStatus === "prompt" && (
         <button type="button" onClick={requestLocation}
-          className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-accent-tint px-4 py-3 text-left">
+          className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-accent-tint px-4 py-3 text-left md:mx-auto md:w-full md:max-w-[40rem]">
           <LocateFixed size={20} className="shrink-0 text-accent-ink" aria-hidden="true" />
           <span className="flex flex-1 flex-col">
             <span className="text-sm font-semibold text-ink">See spots near you first</span>
@@ -249,7 +249,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
               return (
                 <li key={place.id} className="border-b border-border">
                   <button type="button" disabled={inThisList} onClick={() => choose(place, saved[0])}
-                    className="flex w-full items-center gap-3.5 px-5 py-3.5 text-left active:bg-subtle disabled:opacity-60">
+                    className="flex w-full items-center gap-3.5 px-page py-3.5 text-left active:bg-subtle disabled:opacity-60">
                     <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-display text-xl font-extrabold ${tileTint(place.name)}`}>
                       {place.name.charAt(0).toUpperCase()}
                     </span>

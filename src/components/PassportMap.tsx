@@ -119,7 +119,7 @@ export default function PassportMap({ places, onOpen, onClose }: {
       </Map>
 
       {/* Chrome */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-3 bg-gradient-to-b from-background via-background/80 to-transparent px-5 pt-safe pb-8">
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-3 bg-gradient-to-b from-background via-background/80 to-transparent px-page pt-safe pb-8">
         <div className="pointer-events-auto flex items-center justify-between pt-2">
           <h2 className="m-0 font-display text-3xl font-extrabold tracking-[-0.03em]">Passport</h2>
           <button type="button" onClick={onClose} aria-label="Close map"

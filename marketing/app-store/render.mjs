@@ -1,6 +1,7 @@
-// Renders App Store screenshots (1290×2796, accepted for the 6.9" iPhone slot)
-// from phone screenshots in ./screens and the copy in slides.json.
-//   node render.mjs            → ../../app-store-assets/v2/*.png
+// Renders App Store screenshots from device screenshots and the copy in slides.json.
+//   node render.mjs            iPhone 6.9" (1290×2796) from screens/*        → app-store-assets/v2/
+//   node render.mjs --ipad     iPad 13"    (2064×2752) from screens/ipad/*   → app-store-assets/v2/ipad/
+// Add screen names (e.g. 3-spin) to render only those slides.
 // Needs Playwright with a Chromium: `npm i -D playwright && npx playwright install chromium`.
 import { chromium } from "playwright";
 import { readFileSync, readdirSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -9,19 +10,28 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../..");
-const out = resolve(root, "app-store-assets/v2");
+const args = process.argv.slice(2);
+const ipad = args.includes("--ipad");
+const out = resolve(root, "app-store-assets/v2", ipad ? "ipad" : "");
+const shots = resolve(here, "screens", ipad ? "ipad" : "");
 mkdirSync(out, { recursive: true });
 const font = (pkg, file) => pathToFileURL(resolve(root, "node_modules/@fontsource-variable", pkg, "files", file)).href;
 const slides = JSON.parse(readFileSync(resolve(here, "slides.json"), "utf8"));
-const screens = readdirSync(resolve(here, "screens"));
-const only = process.argv.slice(2);
+const screens = readdirSync(shots);
+const only = args.filter((a) => !a.startsWith("--"));
 
-const W = 1290, H = 2796;
+// Everything below is laid out for the iPhone canvas; the iPad one scales it by `k`
+// and swaps the phone frame for a tablet frame.
+const W = ipad ? 2064 : 1290, H = ipad ? 2752 : 2796, k = ipad ? 1.35 : 1;
+const device = ipad
+  ? { width: 1560, pad: 30, radius: 90, inner: 62, island: false }
+  : { width: 980, pad: 26, radius: 150, inner: 124, island: true };
 const html = (s, src) => `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face { font-family: Bricolage; src: url(${font("bricolage-grotesque", "bricolage-grotesque-latin-wght-normal.woff2")}); font-weight: 200 800; }
 @font-face { font-family: Geist; src: url(${font("geist", "geist-latin-wght-normal.woff2")}); font-weight: 100 900; }
 @font-face { font-family: GeistMono; src: url(${font("geist-mono", "geist-mono-latin-wght-normal.woff2")}); font-weight: 100 900; }
 * { box-sizing: border-box; margin: 0; }
+html { zoom: 1; } .k { zoom: ${k}; }
 body { width: ${W}px; height: ${H}px; overflow: hidden; position: relative; background: #F8FAFC; font-family: Geist; color: #0F172A; }
 .glow { position: absolute; inset: -400px -300px auto; height: 1500px; background: radial-gradient(closest-side, rgba(255,69,58,.16), rgba(255,69,58,0)); }
 .ring { position: absolute; border: 3px dashed #CBD5E1; border-radius: 50%; }
@@ -29,11 +39,12 @@ body { width: ${W}px; height: ${H}px; overflow: hidden; position: relative; back
 .eyebrow { display: inline-block; font-family: GeistMono; font-size: 34px; letter-spacing: .16em; color: #C2261C; background: #FFE4E1; padding: 14px 30px; border-radius: 999px; }
 h1 { text-wrap: balance; font-family: Bricolage; font-weight: 800; font-size: 142px; line-height: .98; letter-spacing: -.035em; margin-top: 44px; }
 p { text-wrap: balance; font-size: 50px; line-height: 1.3; color: #64748B; margin: 36px auto 0; max-width: 1000px; }
-.phone { position: absolute; left: 50%; top: 720px; width: 980px; transform: translateX(-50%); padding: 26px; border-radius: 150px; background: #0F172A;
+.phone { position: absolute; left: 50%; top: 720px; width: ${device.width}px; transform: translateX(-50%); padding: ${device.pad}px; border-radius: ${device.radius}px; background: #0F172A;
   box-shadow: 0 80px 160px rgba(15,23,42,.28), inset 0 0 0 6px #334155; }
-.screen { position: relative; border-radius: 124px; overflow: hidden; aspect-ratio: 924 / 2000; background: #fff; }
+.screen { position: relative; border-radius: ${device.inner}px; overflow: hidden; background: #fff; }
+.screen img { height: auto !important; }
 .screen img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
-.status { position: absolute; inset: 0 0 auto; height: 5.2%; display: flex; align-items: center; justify-content: space-between; padding: 1.4% 9% 0 11%; font: 600 46px Geist; }
+.status { position: absolute; inset: 0 0 auto; height: ${ipad ? "2.2%" : "5.2%"}; display: flex; align-items: center; justify-content: space-between; padding: ${ipad ? "0.6% 4% 0 5%" : "1.4% 9% 0 11%"}; font: 600 ${ipad ? 34 : 46}px Geist; }
 .status.photo { color: #fff; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(0,0,0,.08) !important; }
 .status.photo g { fill: #fff; } .status.photo rect[fill=none] { stroke: #fff; }
 .patch { position: absolute; display: flex; align-items: center; font-family: Geist; white-space: nowrap; }
@@ -44,7 +55,7 @@ p { text-wrap: balance; font-size: 50px; line-height: 1.3; color: #64748B; margi
 </style></head><body>
 <div class="glow"></div>
 <div class="ring" style="width:1500px;height:1500px;left:-105px;top:1320px"></div>
-<div class="copy"><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.sub}</p></div>
+<div class="copy k"><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.sub}</p></div>
 <div class="phone"><div class="screen">
   <img id="shot" src="${src}">
   ${(s.patches ?? []).map((p, i) => `<div class="patch" data-i="${i}">${p.text}</div>`).join("")}
@@ -52,9 +63,9 @@ p { text-wrap: balance; font-size: 50px; line-height: 1.3; color: #64748B; margi
     <svg width="150" height="40" viewBox="0 0 150 40"><g fill="#0F172A"><rect x="0" y="26" width="9" height="12" rx="2"/><rect x="13" y="19" width="9" height="19" rx="2"/><rect x="26" y="11" width="9" height="27" rx="2"/><rect x="39" y="3" width="9" height="35" rx="2"/>
     <path d="M75 36l-6-7a9 9 0 0112 0zM63 22a17 17 0 0124 0l-4 4a11 11 0 00-16 0zM57 15a26 26 0 0136 0l-4 4a20 20 0 00-28 0z"/>
     <rect x="102" y="6" width="40" height="28" rx="8" fill="none" stroke="#0F172A" stroke-width="3" opacity=".45"/><rect x="106" y="10" width="32" height="20" rx="5"/><rect x="144" y="15" width="4" height="10" rx="2" opacity=".45"/></g></svg></div>
-  <div class="island"></div>
+  ${device.island ? '<div class="island"></div>' : ""}
 </div></div>
-<div class="chip ${s.chipAt}">${s.chip}</div>
+<div class="chip k ${s.chipAt}">${s.chip}</div>
 </body></html>`;
 
 // Loaded from a file next to the screenshots so fonts and images resolve, and
@@ -68,8 +79,10 @@ const page = await browser.newPage({ viewport: { width: W, height: H } });
 for (const s of slides) {
   if (only.length && !only.includes(s.screen)) continue;
   const file = screens.find((f) => f.startsWith(s.screen + "."));
-  if (!file) { console.log(`skip ${s.file}: no screens/${s.screen}.*`); continue; }
-  writeFileSync(tmp, html(s, pathToFileURL(resolve(here, "screens", file)).href));
+  if (!file) { console.log(`skip ${s.file}: no ${ipad ? "screens/ipad" : "screens"}/${s.screen}.*`); continue; }
+  // Patches, chip positions and status style are measured per device; iPad ones go under "ipad".
+  const slide = ipad ? { ...s, patches: undefined, chipY: undefined, status: undefined, ...(s.ipad ?? {}) } : s;
+  writeFileSync(tmp, html(slide, pathToFileURL(resolve(shots, file)).href));
   await page.goto(pathToFileURL(tmp).href, { waitUntil: "load" });
   await page.evaluate(() => document.fonts.ready);
   // Sit the phone just below the copy (headlines can run to two lines); chips follow it.
@@ -79,7 +92,7 @@ for (const s of slides) {
     document.querySelector(".phone").style.top = `${top}px`;
     const chip = document.querySelector(".chip");
     chip.style.top = `${top + (chipY ?? (chip.classList.contains("left") ? 700 : 240))}px`;
-  }, s.chipY);
+  }, slide.chipY);
   // Cover the real status bar with a clean 9:41 one in the screenshot's own background colour.
   // Patches replace text in the screenshot (e.g. a name): each covers a box, in the
   // screenshot's own pixels, with the colour just inside its top-left corner.
@@ -98,8 +111,8 @@ for (const s of slides) {
         paddingLeft: `${(p.pad ?? 5) * k}px`,
       });
     });
-  }, s.patches ?? []);
-  await page.screenshot({ path: resolve(out, `${s.file}_1290x2796.png`) });
+  }, slide.patches ?? []);
+  await page.screenshot({ path: resolve(out, `${s.file}_${W}x${H}.png`) });
   console.log("wrote", s.file);
 }
 rmSync(tmp, { force: true });

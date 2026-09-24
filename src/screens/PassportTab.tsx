@@ -87,7 +87,7 @@ export function PassportTab({ uid, group, onOpen }: {
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
-      <div className="flex flex-col gap-4 px-5 pt-safe">
+      <div className="mx-auto w-full max-w-2xl flex flex-col gap-4 px-5 pt-safe">
         <div className="flex flex-col gap-1 pt-2">
           <Eyebrow>Your culinary journey</Eyebrow>
           <PageTitle>Passport</PageTitle>
