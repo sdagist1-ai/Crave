@@ -44,14 +44,15 @@ type GooglePlace = {
   photos?: { name: string }[];
   currentOpeningHours?: { openNow?: boolean };
   regularOpeningHours?: { weekdayDescriptions?: string[] };
-  addressComponents?: { longText: string; shortText: string; types: string[] }[];
+  addressComponents?: { longText?: string; shortText?: string; types?: string[] }[];
 };
 
 // City for Passport counts, a neighbourhood-level `area` for cards, country code.
+// Google omits `types` on some address components, so never assume it's there.
 function locationOf(p: GooglePlace) {
   const find = (...types: string[]) => {
     for (const type of types) {
-      const c = p.addressComponents?.find((c) => c.types.includes(type));
+      const c = p.addressComponents?.find((c) => c.types?.includes(type));
       if (c) return c;
     }
     return undefined;

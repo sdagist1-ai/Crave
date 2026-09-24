@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, Loader2, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import type { Group, Restaurant, SortOption } from "../types";
 import { fetchRestaurants } from "../lib/restaurants";
-import { useDebounce } from "../hooks/useDebounce";
 import { CATEGORIES, SORT_LABELS, VIBE_OPTIONS } from "../constants/theme";
 import { RestaurantCard, RestaurantCardSkeleton } from "../components/RestaurantCard";
 import { AvatarStack, Eyebrow, FilterChip, Glow, PrimaryButton, Segmented, Sheet } from "../components/ui";
@@ -23,16 +22,14 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
   const [category, setCategory] = useState<string | null>(null);
   const [vibes, setVibes] = useState<string[]>([]);
   const [sort, setSort] = useState<SortOption>("newest");
-  const [query, setQuery] = useState("");
-  const search = useDebounce(query.trim(), 250);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const feed = useInfiniteQuery({
-    queryKey: ["restaurants", "feed", uid, group?.id, tab, category, vibes, sort, search],
+    queryKey: ["restaurants", "feed", uid, group?.id, tab, category, vibes, sort],
     queryFn: ({ pageParam }) => fetchRestaurants({
       uid, groupId: group!.id, pageParam, filterTab: tab, filterCategory: category,
-      filterVibes: vibes, sortBy: sort, search,
+      filterVibes: vibes, sortBy: sort,
     }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
@@ -59,9 +56,9 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
   const triedCount = group?.tried_count ?? 0;
   const cravelistCount = (group?.place_count ?? 0) - triedCount;
   const filtersActive = sort !== "newest" || vibes.length > 0;
-  const anyFilter = filtersActive || !!category || !!search;
+  const anyFilter = filtersActive || !!category;
 
-  const clearFilters = () => { setCategory(null); setVibes([]); setSort("newest"); setQuery(""); };
+  const clearFilters = () => { setCategory(null); setVibes([]); setSort("newest"); };
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
@@ -104,43 +101,26 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
           </h1>
         </div>
 
-        {/* Search within the list + filters */}
-        <div className="flex h-[50px] items-center gap-2.5 rounded-2xl border border-border bg-surface pr-1.5 pl-3.5 focus-within:border-accent">
-          <Search size={18} className="shrink-0 text-muted" aria-hidden="true" />
-          <label htmlFor="list-search" className="sr-only">Search this Cravelist</label>
-          <input
-            id="list-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search spots, dishes, vibes…"
-            enterKeyHint="search"
-            className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
-          />
-          {query && (
-            <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted active:bg-subtle">
-              {feed.isFetching && search ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <Segmented<Tab>
+              value={tab}
+              onChange={setTab}
+              options={[
+                { id: "cravelist", label: "Cravelist", count: Math.max(0, cravelistCount) },
+                { id: "tried", label: "Tried", count: triedCount },
+              ]}
+            />
+          </div>
           <button
             type="button"
             onClick={() => setShowFilters(true)}
             aria-label={filtersActive ? "Sort and filter (active)" : "Sort and filter"}
-            className={`relative flex h-9 w-9 items-center justify-center rounded-xl border ${filtersActive ? "border-accent bg-accent-soft text-accent-ink" : "border-border text-muted"}`}
+            className={`flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-[14px] border ${filtersActive ? "border-accent bg-accent-soft text-accent-ink" : "border-border bg-surface text-muted"}`}
           >
-            <SlidersHorizontal size={16} />
+            <SlidersHorizontal size={18} />
           </button>
         </div>
-
-        <Segmented<Tab>
-          value={tab}
-          onChange={setTab}
-          options={[
-            { id: "cravelist", label: "Cravelist", count: Math.max(0, cravelistCount) },
-            { id: "tried", label: "Tried", count: triedCount },
-          ]}
-        />
 
         <div className="-mx-5 flex gap-2 overflow-x-auto px-5">
           <FilterChip active={!category} onClick={() => setCategory(null)}>All</FilterChip>
@@ -163,13 +143,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
             action={<PrimaryButton onClick={() => feed.refetch()} block={false}>Try again</PrimaryButton>}
           />
         ) : restaurants.length === 0 ? (
-          search ? (
-            <EmptyState
-              title={`No saved spots match "${search}"`}
-              body="Want to find it and add it to this list?"
-              action={<PrimaryButton onClick={() => onAdd(search)} block={false}>Search for "{search}"</PrimaryButton>}
-            />
-          ) : (group?.place_count ?? 0) === 0 ? (
+          (group?.place_count ?? 0) === 0 ? (
             <EmptyState
               title="Start your Cravelist"
               body="Save the places you want to try. Everyone in this list sees them."

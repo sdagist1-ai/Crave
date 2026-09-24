@@ -26,18 +26,28 @@ export type PlaceResult = {
 
 export type Coords = { lat: number; lng: number };
 
-export class PlacesError extends Error {}
-
+/** `code` is shown in the UI so a failing search can be diagnosed from a screenshot. */
+export class PlacesError extends Error {
+  constructor(public code: string, message = code) {
+    super(message);
+  }
+}
 
 async function callPlaces<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
   const { data, error } = await supabase.functions.invoke<T>("places", { body, signal });
   if (!error) return data as T;
 
   if (error instanceof FunctionsHttpError) {
+    const status = error.context.status;
+    // Our function answers { error }, the Supabase gateway { message } / { msg }.
     const detail = await error.context.json().catch(() => null);
-    throw new PlacesError(detail?.error ?? `places_${error.context.status}`);
+    const reason = detail?.error ?? detail?.message ?? detail?.msg ?? "unknown";
+    console.error("places function failed", status, JSON.stringify(detail));
+    throw new PlacesError(`${status} ${reason}`);
   }
-  throw new PlacesError(error.message);
+  if (signal?.aborted) throw error;
+  console.error("places function unreachable", error);
+  throw new PlacesError(`network ${error.name}`, error.message);
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
