@@ -68,7 +68,7 @@ export function AvatarStack({ people, max = 3, size = 30 }: { people: AvatarProp
 
 // ─── Score circle (card) ────────────────────────────────────────────────────
 
-export function ScoreCircle({ avgScore, googleRating, size = 52 }: { avgScore: number | null; googleRating?: number | null; size?: number }) {
+export function ScoreCircle({ avgScore, size = 52 }: { avgScore: number | null; size?: number }) {
   const base = "flex shrink-0 flex-col items-center justify-center rounded-full font-mono leading-none";
   const dims = { width: size, height: size };
 
@@ -86,14 +86,6 @@ export function ScoreCircle({ avgScore, googleRating, size = 52 }: { avgScore: n
       <span className={`${base} border-2 border-accent`} style={dims} aria-label={`Group score ${formatScore(avgScore)}`}>
         <span className="text-base font-semibold">{formatScore(avgScore)}</span>
         <span className="mt-0.5 text-[9px] text-muted">AVG</span>
-      </span>
-    );
-  }
-  if (googleRating != null) {
-    return (
-      <span className={`${base} border-2 border-dashed border-border-strong`} style={dims} aria-label={`Google rating ${googleRating}`}>
-        <span className="text-base font-semibold">{Number(googleRating).toFixed(1)}</span>
-        <span className="mt-0.5 text-[9px] text-muted">GOOGLE</span>
       </span>
     );
   }

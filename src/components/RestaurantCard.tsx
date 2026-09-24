@@ -1,4 +1,4 @@
-import { UtensilsCrossed } from "lucide-react";
+import { Star, UtensilsCrossed } from "lucide-react";
 import type { Restaurant } from "../types";
 import { formatPriceLevel, placeSubtitle } from "../utils/helpers";
 import { Avatar, AvatarStack, ScoreCircle, Tag, VibeTag } from "./ui";
@@ -11,6 +11,9 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
 }) {
   const raters = r.reviews.filter((rev) => rev.score != null);
   const price = formatPriceLevel(r.priceLevel);
+  // Google's rating is a hint for places nobody here has scored yet; once the
+  // crew has scored it, their score (the circle) is what matters.
+  const showGoogle = r.avgScore == null && r.rating != null;
 
   return (
     <button
@@ -26,7 +29,18 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
 
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="truncate text-[17px] font-semibold leading-tight text-ink">{r.name}</span>
-        {placeSubtitle(r) && <span className="truncate text-[13px] text-muted">{placeSubtitle(r)}</span>}
+        {(placeSubtitle(r) || showGoogle) && (
+          <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
+            {placeSubtitle(r) && <span className="truncate">{placeSubtitle(r)}</span>}
+            {showGoogle && (
+              <span className="inline-flex shrink-0 items-center gap-0.5" aria-label={`Google rating ${r.rating!.toFixed(1)}`}>
+                {placeSubtitle(r) && <span aria-hidden="true">·</span>}
+                <Star size={11} className="fill-[#f59e0b] text-[#f59e0b]" aria-hidden="true" />
+                <span className="tabular">{r.rating!.toFixed(1)}</span>
+              </span>
+            )}
+          </span>
+        )}
         {(r.vibes.length > 0 || price) && (
           <span className="flex flex-wrap gap-1.5">
             {r.vibes.map((v) => <VibeTag key={v} vibe={v} />)}
@@ -52,7 +66,7 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
         ) : null}
       </span>
 
-      <ScoreCircle avgScore={r.avgScore} googleRating={r.rating} />
+      <ScoreCircle avgScore={r.avgScore} />
     </button>
   );
 }
