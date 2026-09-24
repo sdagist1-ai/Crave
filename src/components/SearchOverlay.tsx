@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, CloudOff, Loader2, Plus, Search, Star, X } from "lucide-react";
+import { ChevronLeft, CloudOff, Loader2, LocateFixed, Plus, Search, Star, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { cachePlacePhoto, searchPlaces, type PlaceResult } from "../lib/places";
+import { cachePlacePhoto, PlacesError, searchPlaces, type PlaceResult } from "../lib/places";
 import { useDebounce } from "../hooks/useDebounce";
 import { useApproxLocation } from "../hooks/useApproxLocation";
 import { VIBE_OPTIONS } from "../constants/theme";
@@ -49,7 +49,10 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const coords = useApproxLocation();
+  const { coords, status: locationStatus, request: requestLocation } = useApproxLocation();
+  // Wait for a location we already have permission for, so results come back
+  // near-you-first instead of searching twice.
+  const locationSettled = locationStatus !== "checking" && !(locationStatus === "granted" && !coords);
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const listName = groups.find((g) => g.id === activeGroupId)?.name ?? "your list";
@@ -61,7 +64,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   const results = useQuery({
     queryKey: ["searchRestaurants", trimmedQuery, coords?.lat.toFixed(2), coords?.lng.toFixed(2)],
     queryFn: ({ signal }) => searchPlaces(trimmedQuery, { coords, signal }),
-    enabled: canSearch,
+    enabled: canSearch && locationSettled,
     staleTime: 5 * 60 * 1000,
     retry: 1,
     placeholderData: keepPreviousData, // keep previous results on screen while typing
@@ -200,11 +203,27 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
         </div>
       </div>
 
+      {locationStatus === "prompt" && (
+        <button type="button" onClick={requestLocation}
+          className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-accent-tint px-4 py-3 text-left">
+          <LocateFixed size={20} className="shrink-0 text-accent-ink" aria-hidden="true" />
+          <span className="flex flex-1 flex-col">
+            <span className="text-sm font-semibold text-ink">See spots near you first</span>
+            <span className="text-xs text-muted">Share your location to rank results by distance.</span>
+          </span>
+          <span className="text-sm font-semibold text-accent-ink">Allow</span>
+        </button>
+      )}
+
       <div className="flex-1 overflow-y-auto pb-safe">
         {query.trim().length < 2 ? (
           <div className="flex flex-col items-center px-8 py-16 text-center text-muted">
             <Search size={32} className="mb-3 text-border-strong" aria-hidden="true" />
-            <p className="m-0 text-sm">Search by name, cuisine or neighbourhood.{coords ? " Results near you come first." : ""}</p>
+            <p className="m-0 text-sm">
+              Search by name, cuisine or neighbourhood.
+              {coords ? " Results near you come first."
+                : locationStatus === "denied" ? " Turn on location for Crave in Settings to see nearby spots first." : ""}
+            </p>
           </div>
         ) : results.isError && !results.data ? (
           <div className="flex flex-col items-center px-8 py-12 text-center">
@@ -212,6 +231,9 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
             <p className="m-0 mb-1 text-[15px] font-semibold">Search isn't working right now</p>
             <p className="m-0 mb-5 text-sm text-muted">Check your connection and try again.</p>
             <PrimaryButton onClick={() => results.refetch()} block={false}>Try again</PrimaryButton>
+            {results.error instanceof PlacesError && (
+              <p className="m-0 mt-4 font-mono text-[11px] text-muted">Error: {results.error.code}</p>
+            )}
           </div>
         ) : !results.data ? (
           <div className="flex justify-center py-12"><Loader2 size={28} className="animate-spin text-accent" aria-label="Searching" /></div>
