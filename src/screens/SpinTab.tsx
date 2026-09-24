@@ -7,7 +7,7 @@ import { VIBE_OPTIONS } from "../constants/theme";
 import { getVibeColor, formatPrimaryType } from "../utils/helpers";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentUserId } from "../lib/supabase";
-import { fetchRestaurants } from "../App";
+import { fetchRestaurants } from "../lib/restaurants";
 
 export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => void, groupId: string }) {
   const [selectedVibes, setSelectedVibes] = useState<string[]>([]);

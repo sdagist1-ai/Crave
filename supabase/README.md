@@ -15,6 +15,8 @@ migration history (`supabase migration list`).
 - `…_integrity_and_performance.sql` — FK delete rules, uniqueness, indexes,
   database-derived `restaurants.visited`.
 - `…_column_types.sql` — numeric coordinates/rating, jsonb vibes/hours, uuid owner.
+- `…_group_feed_rpc.sql` — `get_group_feed()`: a page of a list with reviews,
+  authors, adder and score aggregates in one call (filters and sort server-side).
 
 Make new changes as new migration files rather than in the dashboard, then
 regenerate the client types:
@@ -25,6 +27,8 @@ npx supabase gen types typescript --project-id kqdsgmiutfsxsjgubget > src/types/
 
 ## Rules the app relies on
 
+- Lists are read through `get_group_feed(group, tab, category, vibes, sort, limit, offset)`;
+  pass `p_restaurant_id` to fetch one restaurant in the same shape.
 - Groups are created only via `create_group(name)` and joined only via
   `join_group(code)`; both return the group id.
 - Members see only their own groups, co-members' profiles and co-members' reviews.

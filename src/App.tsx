@@ -4,6 +4,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { Search, User, ChevronDown } from "lucide-react";
 import { supabase } from "./lib/supabase";
+import { fetchRestaurants } from "./lib/restaurants";
 import { ScreenOrientation } from "@capacitor/screen-orientation";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Session } from "@supabase/supabase-js";
@@ -57,186 +58,6 @@ async function fetchSavedPlaces(): Promise<SavedPlace[]> {
     notes: r.notes,
     openingHours: Array.isArray(r.opening_hours) ? (r.opening_hours as string[]) : null,
   }));
-}
-
-export type FetchRestaurantsOptions = {
-  uid: string;
-  groupId?: string;
-  pageParam?: string | null;
-  filterTab?: "cravelist" | "tried";
-  filterCategory?: string | null;
-  filterVibes?: string[];
-  sortBy?: SortOption;
-  restaurantId?: number;
-  all?: boolean;
-};
-
-export async function fetchRestaurants({
-  uid, groupId, pageParam, filterTab, filterCategory, filterVibes, sortBy, restaurantId, all
-}: FetchRestaurantsOptions): Promise<{ restaurants: Restaurant[], nextCursor: string | null }> {
-  if (!uid) return { restaurants: [], nextCursor: null };
-
-  let query = supabase
-    .from("restaurants")
-    .select("*, added_by:profiles(id, first_name, last_name, avatar_url)");
-
-  if (groupId) {
-    query = query.eq("group_id", groupId);
-  }
-
-  if (restaurantId) {
-    query = query.eq("id", restaurantId);
-  }
-
-  // Server-side filtering
-  if (filterTab === "cravelist") {
-    query = query.eq("visited", false);
-  } else if (filterTab === "tried") {
-    query = query.eq("visited", true);
-  }
-
-  if (filterCategory) {
-    const c = filterCategory.toLowerCase();
-    if (c === "breakfast & brunch") {
-      query = query.or("primary_type.ilike.%bagel%,name.ilike.%bagel%,primary_type.ilike.%breakfast%,name.ilike.%breakfast%,primary_type.ilike.%brunch%,name.ilike.%brunch%,primary_type.ilike.%diner%,name.ilike.%diner%");
-    } else if (c === "bars") {
-      query = query.or("primary_type.ilike.%bar%,primary_type.ilike.%pub%,primary_type.ilike.%night_club%,primary_type.ilike.%club%,primary_type.ilike.%wine%");
-    } else if (c === "bakeries") {
-      query = query.or("primary_type.ilike.%bakery%,name.ilike.%bakery%");
-    } else if (c === "coffee & tea") {
-      query = query.or("primary_type.ilike.%cafe%,primary_type.ilike.%coffee%,primary_type.ilike.%tea%,name.ilike.%coffee%");
-    } else if (c === "ice cream & dessert") {
-      query = query.or("primary_type.ilike.%ice_cream%,primary_type.ilike.%dessert%,name.ilike.%ice cream%,name.ilike.%gelato%");
-    } else if (c === "restaurants") {
-      query = query.or("primary_type.ilike.%restaurant%,primary_type.ilike.%food%,primary_type.ilike.%diner%");
-    }
-  }
-
-  // Sorting and Pagination
-  if (sortBy === "rating") {
-    query = query.order("rating", { ascending: false, nullsFirst: false });
-  } else {
-    // Default or newest
-    query = query.order("created_at", { ascending: false });
-  }
-
-  // If using cursor pagination, we filter by created_at. (Requires created_at ordering)
-  // For sorting by rating, pagination needs an offset or cursor on rating. 
-  // To keep it simple, we'll use offset if sorting by rating, or cursor if newest.
-  // When all is true (e.g. for Mapbox & Calendar), fetch up to 1000 items so the full map is populated
-  const PAGE_SIZE = all ? 1000 : 20;
-  const pageIndex = pageParam ? parseInt(pageParam, 10) : 0;
-  query = query.range(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE - 1);
-
-  // Parallelize group members lookup with the primary restaurants query to eliminate waterfalls
-  const membersPromise = groupId 
-    ? supabase.from("group_members").select("user_id").eq("group_id", groupId) 
-    : Promise.resolve({ data: [] });
-
-  const [{ data, error }, membersRes] = await Promise.all([query, membersPromise]);
-
-  if (error) throw error;
-  if (!data || data.length === 0) return { restaurants: [], nextCursor: null };
-
-  const nextCursor = data.length === PAGE_SIZE ? (pageIndex + 1).toString() : null;
-
-  // Reviews for these places, with each author's name embedded (RLS limits them
-  // to the user's co-members).
-  const placeIds = data.map((r) => r.place_id);
-  const globalReviewsRes = await supabase
-    .from("reviews")
-    .select("*, author:profiles(first_name)")
-    .in("place_id", placeIds);
-
-  const activeGroupMembers = membersRes.data ? membersRes.data.map(m => m.user_id) : [];
-  if (globalReviewsRes.error) throw globalReviewsRes.error;
-  const allGlobalReviews = (globalReviewsRes.data || []).map(({ author, ...rev }) => ({
-    ...rev,
-    authorName: author ? author.first_name || "Lover" : "Guest",
-  }));
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const restaurants = data.map((r: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reviews = allGlobalReviews.filter((rev: any) => {
-      if (rev.place_id !== r.place_id) return false;
-      if (groupId) return rev.user_id === uid || activeGroupMembers.includes(rev.user_id);
-      return true;
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const myReview = reviews.find((rev: any) => rev.user_id === uid);
-
-    // Dynamically aggregate all photos uploaded by everyone within the Workspace!
-    const allVisitPhotos: { url: string; authorId: string; authorName?: string }[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    reviews.forEach((rev: any) => {
-      // Support the new infinite arrays natively
-      if (rev.photo_urls && Array.isArray(rev.photo_urls) && rev.photo_urls.length > 0) {
-        rev.photo_urls.forEach((url: string) => allVisitPhotos.push({ url, authorId: rev.user_id, authorName: rev.authorName }));
-      }
-      // Only fallback to legacy single string backup if the array isn't being used
-      else if (rev.photo_url) {
-        allVisitPhotos.push({ url: rev.photo_url, authorId: rev.user_id, authorName: rev.authorName });
-      }
-    });
-
-    // Squad / Personal status: A restaurant is visited if marked in DB, or if reviewed by anyone/current user
-    const isVisited = !!r.visited || reviews.length > 0 || !!myReview;
-
-    // Strict Filter: Never show already-visited/reviewed restaurants on the Cravelist (wishlist)
-    if (filterTab === "cravelist" && isVisited) {
-      return null;
-    }
-    // Strict Filter: Never show unvisited restaurants in the tried / nostalgia pool
-    if (filterTab === "tried" && !isVisited) {
-      return null;
-    }
-
-    const parsedVibes = typeof r.vibes === "string" ? JSON.parse(r.vibes) : r.vibes || [];
-    if (filterVibes && filterVibes.length > 0) {
-      const hasVibe = filterVibes.some((v: string) =>
-        parsedVibes.map((pv: string) => pv.toLowerCase()).includes(v.toLowerCase())
-      );
-      if (!hasVibe) return null;
-    }
-
-    return {
-      id: r.id,
-      placeId: r.place_id,
-      groupId: r.group_id,
-      name: r.name,
-      address: r.address,
-      latitude: parseFloat(r.latitude),
-      longitude: parseFloat(r.longitude),
-      rating: r.rating ? parseFloat(r.rating) : null,
-      userRatingCount: r.user_rating_count ?? null,
-      priceLevel: r.price_level ?? null,
-      primaryType: r.primary_type ?? null,
-      photoUrl: r.photo_url ?? null,
-      websiteUrl: r.website_url ?? null,
-      bookingPlatform: r.booking_platform ?? null,
-      bookingUrl: r.booking_url ?? null,
-      vibes: parsedVibes,
-      // Use parsed JSON mapping for the arrays natively
-      openingHours: typeof r.opening_hours === "string" ? JSON.parse(r.opening_hours) : r.opening_hours || null,
-      lastSyncedAt: r.last_synced_at ?? null,
-
-      visited: isVisited,
-      userScore: myReview?.score ?? null,
-      notes: myReview?.notes ?? null,
-      visitPhotoUrl: myReview?.photo_url ?? null,
-      visitPhotoUrls: myReview?.photo_urls || [],
-      visitedAt: myReview?.created_at ?? null,
-
-      reviews: reviews,
-      allVisitPhotos: allVisitPhotos,
-      addedBy: r.added_by ?? null,
-
-      createdAt: r.created_at,
-    };
-  }).filter(Boolean) as Restaurant[];
-
-  return { restaurants, nextCursor };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -331,31 +152,38 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
     if (derivedGroupId) localStorage.setItem("crave_active_group", derivedGroupId);
   }, [derivedGroupId]);
 
-  // 🌍 ⚡️ LIVE WEBSOCKET SUBSCRIPTION
-  // The silent observer. Replaces battery-draining polling with surgical push-events!
+  // Live updates from other members. Restaurant changes are filtered to the list
+  // being viewed; reviews/groups are already limited to co-members by RLS.
+  // Bursts of events (e.g. a review plus the trigger updating `visited`) are
+  // coalesced into one refetch.
   useEffect(() => {
-    const channel = supabase.channel("crave-global-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "restaurants" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["restaurants"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["restaurants"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["groups"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["groups"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["groups"] }); // Needed for avatar updates!
-      })
+    const pending = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const invalidate = (key: "restaurants" | "groups") => {
+      pending.add(key);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        pending.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+        pending.clear();
+      }, 400);
+    };
+
+    const channel = supabase.channel(`crave-sync-${derivedGroupId ?? "none"}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "restaurants",
+        ...(derivedGroupId ? { filter: `group_id=eq.${derivedGroupId}` } : {}),
+      }, () => invalidate("restaurants"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => invalidate("restaurants"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, () => invalidate("groups"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => invalidate("groups"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => invalidate("groups"))
       .subscribe();
 
     return () => {
+      clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, derivedGroupId]);
 
   // 2. Fetch Restaurants dynamically scoped to the Workspace
   const restaurantsQuery = useInfiniteQuery({
@@ -463,10 +291,20 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
   const allRestaurants: Restaurant[] = useMemo(() => restaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [restaurantsQuery.data]);
   const workspaceAllRestaurants: Restaurant[] = useMemo(() => workspaceAllRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [workspaceAllRestaurantsQuery.data]);
 
-  // Automatically bind the actively viewed card to the React Query cache
-  // This physically updates the open modal the second polling detects your lover rated it!
+  // The open detail sheet reads its own row from the database, so it reflects new
+  // ratings/photos wherever it was opened from (list, spin, passport, calendar).
+  const detailQuery = useQuery({
+    queryKey: ["restaurants", "detail", sessionUid, detailRestaurant?.groupId, detailRestaurant?.id],
+    queryFn: async () => {
+      const { restaurants } = await fetchRestaurants({
+        uid: sessionUid, groupId: detailRestaurant!.groupId, restaurantId: detailRestaurant!.id,
+      });
+      return restaurants[0] ?? null;
+    },
+    enabled: !!detailRestaurant,
+  });
   const syncedDetailRestaurant = detailRestaurant
-    ? allRestaurants.find(r => r.id === detailRestaurant.id) || detailRestaurant
+    ? (detailQuery.data?.id === detailRestaurant.id ? detailQuery.data : detailRestaurant)
     : null;
 
   // Wait for background validation before blindly rendering empty states from old caches

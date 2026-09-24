@@ -239,6 +239,19 @@ export type Database = {
     Functions: {
       create_group: { Args: { group_name: string }; Returns: string }
       delete_user_account: { Args: never; Returns: undefined }
+      get_group_feed: {
+        Args: {
+          p_category?: string
+          p_group_id: string
+          p_limit?: number
+          p_offset?: number
+          p_restaurant_id?: number
+          p_sort?: string
+          p_tab?: string
+          p_vibes?: string[]
+        }
+        Returns: Json[]
+      }
       join_group: { Args: { invite_code: string }; Returns: string }
     }
     Enums: {

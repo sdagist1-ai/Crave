@@ -58,6 +58,9 @@ export type Restaurant = {
   reviews: Review[];
   allVisitPhotos?: { url: string; authorId: string; authorName?: string }[];
   addedBy?: Profile | null;
+  /** Average score from the list's members, and how many have scored it */
+  avgScore?: number | null;
+  ratedCount?: number;
   
   createdAt: string;
 };
