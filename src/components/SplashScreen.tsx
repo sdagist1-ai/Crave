@@ -35,7 +35,7 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
     >
       <style>{`
         .crave-splash-text {
-          font-family: 'DM Sans', sans-serif;
+          font-family: var(--font-heading);
           letter-spacing: -2px;
         }
 

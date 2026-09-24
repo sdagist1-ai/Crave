@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@iconify/react";
-import { supabase } from "../lib/supabase";
 import { Restaurant } from "../types";
 import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
 import { syncRestaurantData } from "../lib/places";
@@ -28,7 +27,7 @@ export function RestaurantDetailSheet({
     // Background TTL Strategy: 30 Day Auto-Sync & Legacy Backfill
     if (!restaurant.lastSyncedAt || !restaurant.openingHours) {
       console.log(`[Background Task] Legacy missing data for ${restaurant.name}. Force syncing...`);
-      syncRestaurantData(restaurant.placeId, restaurant.id, supabase).then(() => {
+      syncRestaurantData(restaurant.placeId, restaurant.id).then(() => {
         queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       });
     } else {
@@ -36,7 +35,7 @@ export function RestaurantDetailSheet({
       const daysSinceSync = msSinceSync / (1000 * 60 * 60 * 24);
       if (daysSinceSync >= 30) {
         console.log(`[Background Task] TTL Expired for ${restaurant.name} (${Math.floor(daysSinceSync)} days). Silently syncing...`);
-        syncRestaurantData(restaurant.placeId, restaurant.id, supabase).then(() => {
+        syncRestaurantData(restaurant.placeId, restaurant.id).then(() => {
           queryClient.invalidateQueries({ queryKey: ["restaurants"] });
         });
       }
@@ -280,7 +279,7 @@ export function RestaurantDetailSheet({
               ) : (
                 <div className="flex flex-col items-center justify-center py-6 text-center px-4">
                   <div className="w-16 h-16 bg-secondary border border-border text-muted-foreground rounded-full flex items-center justify-center mb-4 shadow-inner">
-                    <Icon icon="solar:dining-bold" className="size-8" />
+                    <Icon icon="solar:chef-hat-bold" className="size-8" />
                   </div>
                   <h4 className="font-heading font-black text-foreground text-xl">Ready to try this?</h4>
                   <p className="text-sm font-medium text-muted-foreground mt-2 max-w-[250px] leading-relaxed">Visit this spot and submit your rating!</p>

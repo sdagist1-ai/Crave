@@ -6,7 +6,7 @@ import { Restaurant } from "../types";
 import { VIBE_OPTIONS } from "../constants/theme";
 import { getVibeColor, formatPrimaryType } from "../utils/helpers";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "../lib/supabase";
+import { getCurrentUserId } from "../lib/supabase";
 import { fetchRestaurants } from "../App";
 
 export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => void, groupId: string }) {
@@ -31,10 +31,10 @@ export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => vo
   const { data: poolResp } = useQuery({
     queryKey: ["spin_pool", groupId, nostalgia, filterCategory, selectedVibes],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return { restaurants: [] };
+      const uid = await getCurrentUserId();
+      if (!uid) return { restaurants: [] };
       return fetchRestaurants({
-        uid: user.id,
+        uid,
         groupId,
         filterTab: nostalgia ? "tried" : "cravelist",
         filterCategory,

@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "icons": "node scripts/build-icons.mjs",
+    "predev": "node scripts/build-icons.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-icons.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -20,6 +23,8 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/screen-orientation": "^8.0.1",
     "@capacitor/share": "^8.0.1",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/outfit": "^5.3.0",
     "@iconify/react": "^6.0.2",
     "@supabase/supabase-js": "^2.100.1",
     "@tanstack/query-sync-storage-persister": "^5.101.4",
@@ -36,6 +41,11 @@
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
     "@eslint/js": "^9.39.4",
+    "@iconify-json/fluent-emoji": "^1.2.7",
+    "@iconify-json/mdi": "^1.2.3",
+    "@iconify-json/ph": "^1.2.2",
+    "@iconify-json/solar": "^1.2.12",
+    "@iconify/utils": "^3.1.7",
     "@tailwindcss/vite": "^4.2.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/google.maps": "^3.58.1",

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Utensils, Plus, Users, ArrowRight, Camera } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { getCurrentUserId, supabase } from "../lib/supabase";
 import { C } from "../constants/theme";
 
 export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
@@ -19,7 +19,7 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   const [uploadingGroupAvatar, setUploadingGroupAvatar] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id || null));
+    getCurrentUserId().then(setUserId);
   }, []);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Camera, Utensils, X } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { getCurrentUserId, supabase } from "../lib/supabase";
 import { C } from "../constants/theme";
 import { Restaurant } from "../types";
 import { ScoreRating } from "./ScoreRating";
@@ -121,37 +121,24 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
 
       const finalUrls = [...existingUrls, ...newUploadedUrls];
       
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not logged in");
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error("Not logged in");
 
-      // 3. Update or Insert into the dedicated reviews table
-      const existingReview = restaurant.reviews?.find(r => r.user_id === user.id);
-      
-      let reqError;
-      if (existingReview) {
-        const { error } = await supabase
-          .from("reviews")
-          .update({
-             score: score || null,
-             notes: notes.trim() || null,
-             photo_url: finalUrls.length > 0 ? finalUrls[0] : null,
-             photo_urls: finalUrls.length > 0 ? finalUrls : null,
-          })
-          .eq("id", existingReview.id);
-        reqError = error;
-      } else {
-        const { error } = await supabase
-          .from("reviews")
-          .insert({
-             place_id: restaurant.placeId,
-             user_id: user.id,
-             score: score || null,
-             notes: notes.trim() || null,
-             photo_url: finalUrls.length > 0 ? finalUrls[0] : null,
-             photo_urls: finalUrls.length > 0 ? finalUrls : null,
-          });
-        reqError = error;
-      }
+      // 3. One review per user per place (unique in the database), so upsert.
+      // The database marks the restaurant as tried once a member has reviewed it.
+      const { error: reqError } = await supabase
+        .from("reviews")
+        .upsert(
+          {
+            place_id: restaurant.placeId,
+            user_id: userId,
+            score: score || null,
+            notes: notes.trim() || null,
+            photo_url: finalUrls.length > 0 ? finalUrls[0] : null,
+            photo_urls: finalUrls.length > 0 ? finalUrls : null,
+          },
+          { onConflict: "user_id,place_id" }
+        );
 
       if (reqError) throw reqError;
       

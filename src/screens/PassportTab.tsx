@@ -455,7 +455,7 @@ export function PassportTab({ restaurants, onQuickStamp }: { restaurants: Restau
                   )}
                 </div>
                 <div className="absolute top-3 left-3 w-6 h-6 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center border border-white/50">
-                  <Icon icon={filterMode === 'tried' ? "solar:stamp-linear" : "solar:bookmark-linear"} className="text-white text-xs drop-shadow-sm" />
+                  <Icon icon={filterMode === 'tried' ? "solar:medal-ribbon-star-linear" : "solar:bookmark-linear"} className="text-white text-xs drop-shadow-sm" />
                 </div>
               </button>
             ))}

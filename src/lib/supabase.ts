@@ -39,3 +39,12 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     detectSessionInUrl: true,
   },
 });
+/**
+ * The signed-in user's id, read from the locally stored session (no network
+ * round trip, unlike auth.getUser()). The database re-verifies the token on
+ * every request, so this is safe for building queries.
+ */
+export async function getCurrentUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user.id ?? null;
+}
