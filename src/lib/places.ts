@@ -98,7 +98,7 @@ export async function syncRestaurantData(placeId: string, supabaseId: number, su
       last_synced_at: new Date().toISOString(),
     };
     if (place.regularOpeningHours?.weekdayDescriptions) {
-      payload.opening_hours = JSON.stringify(place.regularOpeningHours.weekdayDescriptions);
+      payload.opening_hours = place.regularOpeningHours.weekdayDescriptions;
     }
     if (newPhotoUrl) {
       payload.photo_url = newPhotoUrl;

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Camera, Utensils, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { C } from "../constants/theme";
@@ -63,16 +63,6 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  const profileQuery = useQuery({
-    queryKey: ["profile"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      const { data } = await supabase.from("profiles").select("partner_id").eq("id", user.id).single();
-      return data;
-    }
-  });
-  const verb = profileQuery.data?.partner_id ? "We" : "I";
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -165,9 +155,6 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
 
       if (reqError) throw reqError;
       
-      // 4. Directly update the restaurant's visited flag in the database to true
-      await supabase.from("restaurants").update({ visited: true }).eq("id", restaurant.id);
-      
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       onClose();
     } catch (err) {
@@ -259,7 +246,7 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
         <button type="button" onClick={handleSave} disabled={saving || uploading || score === 0}
           className="w-full py-4 rounded-2xl font-bold text-white text-sm disabled:opacity-40 transition-all shadow-lg shadow-rose-200"
           style={{ background: C.rose }}>
-          {uploading ? "Uploading photo..." : saving ? "Saving..." : restaurant.visited ? "Update Rating" : `Mark as ${verb} Tried`}
+          {uploading ? "Uploading photo..." : saving ? "Saving..." : restaurant.visited ? "Update Rating" : "Mark as Tried"}
         </button>
       </div>
     </div>

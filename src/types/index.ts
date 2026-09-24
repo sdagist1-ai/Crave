@@ -7,7 +7,7 @@ export type Profile = {
 
 export type Review = {
   id: number;
-  restaurant_id: number;
+  place_id: string;
   user_id: string;
   authorName?: string;
   score: number | null;
@@ -21,7 +21,7 @@ export type Group = {
   id: string;
   name: string;
   share_code: string | null;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
   avatar_url?: string | null;
   group_members?: { profiles: Profile }[];
