@@ -1,6 +1,0 @@
-# Supabase CLI settings for this project (only what differs from the defaults).
-project_id = "kqdsgmiutfsxsjgubget"
-
-[functions.places]
-# The function verifies the caller's JWT itself (supports asymmetric signing keys).
-verify_jwt = false

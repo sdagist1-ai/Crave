@@ -1,7 +1,7 @@
 // Google Places proxy.
 //
 // The app never holds the Google key: it calls this function (signed in — the
-// function verifies the caller's JWT itself) and it calls Places API (New) with the
+// gateway verifies the JWT) and the function calls Places API (New) with the
 // GOOGLE_PLACES_API_KEY secret. A key restricted to "iOS apps" or "HTTP
 // referrers" cannot work from the Capacitor WebView, so this is also what makes
 // search reliable on device.
@@ -44,14 +44,15 @@ type GooglePlace = {
   photos?: { name: string }[];
   currentOpeningHours?: { openNow?: boolean };
   regularOpeningHours?: { weekdayDescriptions?: string[] };
-  addressComponents?: { longText: string; shortText: string; types: string[] }[];
+  addressComponents?: { longText?: string; shortText?: string; types?: string[] }[];
 };
 
 // City for Passport counts, a neighbourhood-level `area` for cards, country code.
+// Google omits `types` on some address components, so never assume it's there.
 function locationOf(p: GooglePlace) {
   const find = (...types: string[]) => {
     for (const type of types) {
-      const c = p.addressComponents?.find((c) => c.types.includes(type));
+      const c = p.addressComponents?.find((c) => c.types?.includes(type));
       if (c) return c;
     }
     return undefined;
@@ -60,19 +61,6 @@ function locationOf(p: GooglePlace) {
   const area = find("neighborhood", "sublocality_level_1", "sublocality")?.longText ?? city;
   const countryCode = find("country")?.shortText ?? null;
   return { city, area, countryCode };
-}
-
-// Deployed with verify_jwt = false (see supabase/config.toml): the gateway's
-// legacy check rejects tokens signed with the newer asymmetric JWT keys.
-// getClaims() verifies both kinds, so every action still requires a signed-in user.
-async function isSignedIn(req: Request) {
-  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return false;
-  const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    auth: { persistSession: false },
-  });
-  const { data, error } = await client.auth.getClaims(token);
-  return !error && !!data?.claims?.sub;
 }
 
 function json(body: unknown, status = 200) {
@@ -219,7 +207,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   if (!GOOGLE_KEY) return json({ error: "not_configured" }, 503);
-  if (!(await isSignedIn(req))) return json({ error: "unauthorized" }, 401);
 
   let payload: Record<string, unknown>;
   try {
