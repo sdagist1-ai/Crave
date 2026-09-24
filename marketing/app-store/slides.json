@@ -1,0 +1,12 @@
+[
+  { "file": "1_Cravelist", "screen": "1-list", "eyebrow": "YOUR CRAVELIST", "title": "What are we craving?",
+    "sub": "One shared list for every spot you and your crew want to try.", "chip": "❤️  41 spots saved", "chipAt": "right" },
+  { "file": "2_Rate_Together", "screen": "2-detail", "eyebrow": "RATE IT TOGETHER", "title": "Score it as a crew.",
+    "sub": "Everyone rates 1–10. Average 9.0 or higher and it's a MUST.", "chip": "🔥  9.0 · MUST", "chipAt": "left" },
+  { "file": "3_The_Spin", "screen": "3-spin", "eyebrow": "THE SPIN", "title": "Can't decide? Spin.",
+    "sub": "Let fate pick tonight's dinner, or bring back an old favorite.", "chip": "🎉  Fate has spoken", "chipAt": "right" },
+  { "file": "4_Passport", "screen": "4-passport", "eyebrow": "CULINARY PASSPORT", "title": "Collect every bite.",
+    "sub": "Every visit becomes a stamp on your food map.", "chip": "📍  4 MUSTs · 2 cities", "chipAt": "left" },
+  { "file": "5_Add_Nearby", "screen": "5-add", "eyebrow": "ADD IN SECONDS", "title": "Spots near you, first.",
+    "sub": "Search any restaurant, café or bar and save it to your list.", "chip": "⚡  Saved to Bae & I", "chipAt": "right" }
+]
