@@ -20,12 +20,6 @@ const STAMP_TONES = [
 ];
 const STAMP_TILT = [-3, 2, -1, 3, -2];
 
-/** "US" → 🇺🇸 */
-function flagOf(code: string | null) {
-  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "";
-  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
-}
-
 // Lists whose missing locations were already requested this session.
 const backfillRequested = new Set<string>();
 
@@ -196,9 +190,11 @@ function Stamp({ r, index, onOpen, fluid = false }: { r: Restaurant; index: numb
       {/* min-w-0: a long neighbourhood must truncate, not widen the stamp past its border. */}
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-[12px] border border-dashed px-2.5 py-2.5"
         style={{ borderColor: "color-mix(in srgb, currentColor 55%, transparent)" }}>
-        {/* Flag first, and room on the right for the MUST seal. */}
+        {/* Country code first (text, not a flag emoji, so it renders everywhere), and room on the right for the MUST seal. */}
         <span className={`flex min-w-0 items-center gap-1 font-mono text-[9px] tracking-[0.12em] ${must ? "pr-6" : ""}`}>
-          {flagOf(r.countryCode) && <span className="shrink-0 text-xs">{flagOf(r.countryCode)}</span>}
+          {r.countryCode && (
+            <span className="shrink-0 rounded-[3px] border border-current px-[3px] text-[8px] leading-[12px] font-semibold">{r.countryCode.toUpperCase()}</span>
+          )}
           <span className="truncate">{where || "VISITED"}</span>
         </span>
         <span className="line-clamp-2 font-display text-[15px] leading-[1.1] font-extrabold text-ink">{r.name}</span>

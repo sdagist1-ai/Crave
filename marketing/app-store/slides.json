@@ -18,7 +18,72 @@
         "color": "#64748B"
       }
     ],
-    "chipY": 330
+    "chipY": 330,
+    "ipad": {
+      "chipY": 1250,
+      "patches": [
+        {
+          "x": 204,
+          "y": 70,
+          "w": 30,
+          "h": 24,
+          "text": "❤️",
+          "size": 19,
+          "color": "#000",
+          "pad": 2
+        },
+        {
+          "x": 293,
+          "y": 1004,
+          "w": 75,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 293,
+          "y": 1373,
+          "w": 75,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 293,
+          "y": 1558,
+          "w": 75,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 293,
+          "y": 1742,
+          "w": 75,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 293,
+          "y": 1927,
+          "w": 75,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        }
+      ]
+    }
   },
   {
     "file": "2_Rate_Together",
@@ -40,7 +105,35 @@
         "color": "#334155"
       }
     ],
-    "chipY": 1230
+    "chipY": 1230,
+    "ipad": {
+      "status": "photo",
+      "chipY": 290,
+      "patches": [
+        {
+          "x": 92,
+          "y": 624,
+          "w": 80,
+          "h": 28,
+          "text": "Rebecca",
+          "size": 18.9,
+          "color": "#334155",
+          "pad": 3
+        },
+        {
+          "x": 103,
+          "y": 1113,
+          "w": 90,
+          "h": 26,
+          "text": "Rebecca",
+          "size": 18.9,
+          "weight": 600,
+          "color": "#0F172A",
+          "pad": 3
+        }
+      ],
+      "chipAt": "right"
+    }
   },
   {
     "file": "3_The_Spin",
@@ -49,7 +142,10 @@
     "title": "Can't decide? Spin.",
     "sub": "Let fate pick tonight's dinner, or bring back an old favorite.",
     "chip": "🎉  Fate has spoken",
-    "chipAt": "right"
+    "chipAt": "right",
+    "ipad": {
+      "chipY": 130
+    }
   },
   {
     "file": "4_Passport",
@@ -68,6 +164,33 @@
     "sub": "Search any restaurant, café or bar and save it to your list.",
     "chip": "⚡  Saved in one tap",
     "chipAt": "right",
-    "chipY": 640
+    "chipY": 640,
+    "ipad": {
+      "title": "Save it in seconds.",
+      "sub": "Tag the vibe, add a note, and it's on the list for everyone.",
+      "chipY": 700,
+      "patches": [
+        {
+          "x": 243,
+          "y": 77,
+          "w": 28,
+          "h": 26,
+          "text": "❤️",
+          "size": 18,
+          "color": "#000",
+          "pad": 2
+        },
+        {
+          "x": 810,
+          "y": 1884,
+          "w": 28,
+          "h": 28,
+          "text": "❤️",
+          "size": 18,
+          "color": "#000",
+          "pad": 2
+        }
+      ]
+    }
   }
 ]
