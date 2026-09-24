@@ -5,20 +5,20 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
   const [phase, setPhase] = useState<"writing" | "eating" | "done">("writing");
 
   useEffect(() => {
-    // 1. Write-on effect lasts 1.5s
+    // 1. Snappy 400ms display before eating
     const eatTimer = setTimeout(() => {
       setPhase("eating");
-    }, 1500);
+    }, 400);
 
-    // 2. Eating effect lasts 1.5s
+    // 2. Bites complete quickly at 850ms
     const doneTimer = setTimeout(() => {
       setPhase("done");
-    }, 3200);
+    }, 850);
 
-    // 3. Fade out the splash entirely
+    // 3. Complete and unmount at 1050ms
     const unmountTimer = setTimeout(() => {
       onComplete();
-    }, 3800);
+    }, 1050);
 
     return () => {
       clearTimeout(eatTimer);
@@ -29,17 +29,12 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-white flex items-center justify-center transition-opacity duration-500 overflow-hidden"
+      onClick={onComplete}
+      className="fixed inset-0 z-[100] bg-white flex items-center justify-center transition-opacity duration-200 overflow-hidden cursor-pointer"
       style={{ opacity: phase === "done" ? 0 : 1 }}
     >
       <style>{`
-        @keyframes fadeInCrave {
-          0% { opacity: 0; transform: scale(0.95); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        
-        .fade-in-text {
-          animation: fadeInCrave 1.2s cubic-bezier(0.1, 0.7, 0.1, 1) forwards;
+        .crave-splash-text {
           font-family: 'DM Sans', sans-serif;
           letter-spacing: -2px;
         }
@@ -52,9 +47,9 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
       `}</style>
 
       <div className="relative w-full max-w-[280px] h-32 flex items-center justify-center">
-        {/* The Text */}
+        {/* The Text - Visible immediately */}
         <h1
-          className="fade-in-text text-6xl font-black italic tracking-tighter"
+          className="crave-splash-text text-6xl font-black italic tracking-tighter"
           style={{ color: C.rose }}
         >
           Crave
@@ -64,10 +59,10 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
         {phase !== "writing" && (
           <>
             <CartoonBite className="w-16 h-16 right-4 top-8" delay="0s" />
-            <CartoonBite className="w-20 h-20 -left-2 top-2" delay="0.2s" />
-            <CartoonBite className="w-[90px] h-[90px] left-1/2 -ml-10 bottom-2" delay="0.45s" />
-            <CartoonBite className="w-40 h-40 left-1/2 -ml-20 top-1/2 -mt-20" delay="0.7s" />
-            <CartoonBite className="w-64 h-64 left-1/2 -ml-32 top-1/2 -mt-32" delay="1s" />
+            <CartoonBite className="w-20 h-20 -left-2 top-2" delay="0.08s" />
+            <CartoonBite className="w-[90px] h-[90px] left-1/2 -ml-10 bottom-2" delay="0.16s" />
+            <CartoonBite className="w-40 h-40 left-1/2 -ml-20 top-1/2 -mt-20" delay="0.24s" />
+            <CartoonBite className="w-64 h-64 left-1/2 -ml-32 top-1/2 -mt-32" delay="0.32s" />
           </>
         )}
       </div>
@@ -79,7 +74,7 @@ function CartoonBite({ className, delay }: { className: string, delay: string })
   // mathematical ring of 10 teeth
   return (
     <div className={`absolute opacity-0 flex items-center justify-center ${className}`}
-      style={{ animation: `bite 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${delay} forwards` }}>
+      style={{ animation: `bite 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${delay} forwards` }}>
       <div className="absolute w-[80%] h-[80%] bg-white rounded-full" />
       {Array.from({ length: 12 }).map((_, i) => {
         const angle = (i / 12) * Math.PI * 2;

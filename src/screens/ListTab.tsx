@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
-import { RestaurantCard } from "../components/RestaurantCard";
+import { RestaurantCard, RestaurantCardSkeleton } from "../components/RestaurantCard";
 import { Restaurant, SortOption, Group } from "../types";
 import { VIBE_OPTIONS, SORT_LABELS } from "../constants/theme";
 
@@ -11,6 +11,7 @@ export function ListTab({
   fetchNextPage,
   hasNextPage,
   isFetchingNextPage,
+  isLoading,
   filterTab,
   setFilterTab,
   filterCategory,
@@ -31,6 +32,7 @@ export function ListTab({
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  isLoading: boolean;
   filterTab: "cravelist" | "tried";
   setFilterTab: (t: "cravelist" | "tried") => void;
   filterCategory: string | null;
@@ -272,7 +274,13 @@ export function ListTab({
         </div>
 
         <div className="px-4 flex flex-col gap-4 pb-8">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col gap-4">
+              {[1, 2, 3, 4, 5].map((idx) => (
+                <RestaurantCardSkeleton key={idx} />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="bg-secondary w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Icon icon="solar:magnifer-linear" className="text-muted-foreground size-8" />

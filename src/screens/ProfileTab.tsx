@@ -37,6 +37,12 @@ export function ProfileTab() {
 
   const [errorModalMsg, setErrorModalMsg] = useState<string | null>(null);
 
+  // Name Editing State
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -86,6 +92,30 @@ export function ProfileTab() {
       setErrorModalMsg(err.message || "An error occurred");
     } finally {
       setUploadingGroupAvatarId(null);
+    }
+  };
+
+  const handleSaveName = async () => {
+    if (!profile) return;
+    setSavingName(true);
+    try {
+      const { error } = await supabase.from('profiles').update({
+        first_name: editFirstName,
+        last_name: editLastName
+      }).eq('id', profile.id);
+      
+      // Also update auth metadata to keep it in sync
+      await supabase.auth.updateUser({
+        data: { first_name: editFirstName, last_name: editLastName }
+      });
+
+      if (error) throw error;
+      setProfile({ ...profile, first_name: editFirstName, last_name: editLastName });
+      setIsEditingName(false);
+    } catch (err: any) {
+      setErrorModalMsg(err.message || "Failed to update name");
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -180,9 +210,47 @@ export function ProfileTab() {
             </div>
             <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploadingAvatar} />
           </label>
-          <h2 className="font-heading text-2xl font-bold">
-            {profile?.first_name ? `Hi, ${profile.first_name}!` : "My Profile"}
-          </h2>
+          
+          {isEditingName ? (
+            <div className="flex flex-col items-center gap-3 w-full animate-in fade-in zoom-in-95">
+              <input
+                type="text"
+                placeholder="First Name"
+                value={editFirstName}
+                onChange={e => setEditFirstName(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-border bg-background text-sm font-bold text-center focus:outline-none focus:border-primary/50 transition-all"
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                value={editLastName}
+                onChange={e => setEditLastName(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-border bg-background text-sm font-bold text-center focus:outline-none focus:border-primary/50 transition-all"
+              />
+              <div className="flex gap-2 w-full mt-2">
+                <button onClick={() => setIsEditingName(false)} className="flex-1 py-3 bg-secondary rounded-2xl font-bold text-sm">Cancel</button>
+                <button onClick={handleSaveName} disabled={savingName || !editFirstName} className="flex-1 py-3 bg-primary text-primary-foreground rounded-2xl font-bold text-sm shadow-sm">
+                  {savingName ? "..." : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="font-heading text-2xl font-bold">
+                {profile?.first_name ? `${profile.first_name} ${profile.last_name ? profile.last_name.charAt(0) + "." : ""}`.trim() : "My Profile"}
+              </h2>
+              <button 
+                onClick={() => {
+                  setEditFirstName(profile?.first_name || "");
+                  setEditLastName(profile?.last_name || "");
+                  setIsEditingName(true);
+                }} 
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Icon icon="solar:pen-linear" className="size-5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Cravelists */}

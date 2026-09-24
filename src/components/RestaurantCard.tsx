@@ -17,6 +17,8 @@ export function RestaurantCard({
           <img
             src={restaurant.photoUrl}
             alt={restaurant.name}
+            loading="lazy"
+            decoding="async"
             className="w-[100px] h-[100px] rounded-2xl object-cover shadow-sm bg-secondary"
           />
         ) : (
@@ -73,3 +75,20 @@ export function RestaurantCard({
     </div>
   );
 }
+
+export function RestaurantCardSkeleton() {
+  return (
+    <div className="bg-card rounded-[1.5rem] p-3 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-border/50 flex gap-4 animate-pulse">
+      <div className="w-[100px] h-[100px] rounded-2xl bg-secondary/70 shrink-0" />
+      <div className="flex-1 py-1 flex flex-col justify-center space-y-2">
+        <div className="h-4 bg-secondary/80 rounded-md w-3/4" />
+        <div className="h-3 bg-secondary/50 rounded-md w-1/2" />
+        <div className="flex gap-2 pt-1">
+          <div className="h-5 bg-secondary/60 rounded-full w-14" />
+          <div className="h-5 bg-secondary/60 rounded-full w-12" />
+        </div>
+      </div>
+    </div>
+  );
+}
+

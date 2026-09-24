@@ -198,15 +198,19 @@ export function RestaurantDetailSheet({
 
             {/* Basic Info */}
             <div className="px-1">
-              <h2 className="text-3xl font-heading font-black text-foreground leading-tight tracking-tight mb-2">{restaurant.name}</h2>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-muted-foreground mb-4">
-                {restaurant.primaryType && (
-                  <span className="text-foreground font-bold bg-secondary px-2 py-0.5 rounded-md text-[11px] uppercase tracking-wider border border-border/50">
+              <h2 className="text-3xl font-heading font-black text-foreground leading-tight tracking-tight mb-1">{restaurant.name}</h2>
+              
+              <p className="text-[15px] font-medium text-muted-foreground mb-3">
+                {restaurant.address}
+              </p>
+
+              {restaurant.primaryType && (
+                <div className="mb-4 flex items-center">
+                  <span className="text-foreground font-bold bg-secondary px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wider border border-border/50">
                     {formatPrimaryType(restaurant.primaryType)}
                   </span>
-                )}
-                <span>{restaurant.address}</span>
-              </div>
+                </div>
+              )}
 
               {/* Expandable Hours Context Pill */}
               {todaysHoursText && (

@@ -4,7 +4,7 @@ import { TabId } from "../types";
 export function BottomTabBar({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   const tabs: { id: TabId; label: string; icon: string; activeIcon?: string }[] = [
     { id: "list", label: "List", icon: "solar:hamburger-menu-linear", activeIcon: "solar:hamburger-menu-bold" },
-    { id: "calendar", label: "Passport", icon: "solar:global-linear", activeIcon: "solar:global-bold" },
+    { id: "passport", label: "Passport", icon: "solar:global-linear", activeIcon: "solar:global-bold" },
     { id: "spin", label: "Spin", icon: "mdi:dice-5-outline", activeIcon: "mdi:dice-5" },
     { id: "profile", label: "Profile", icon: "solar:user-linear", activeIcon: "solar:user-bold" },
   ];

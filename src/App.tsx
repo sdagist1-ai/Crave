@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { Search, User, ChevronDown } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { ScreenOrientation } from "@capacitor/screen-orientation";
+import { App as CapacitorApp } from "@capacitor/app";
 import { Session } from "@supabase/supabase-js";
 
 // Types & Theme
@@ -12,19 +13,26 @@ import { Restaurant, TabId, Group, SortOption } from "./types";
 import { C } from "./constants/theme";
 
 // Components
-import { SearchOverlay } from "./components/SearchOverlay";
-import { RateSheet } from "./components/RateSheet";
-import { RestaurantDetailSheet } from "./components/RestaurantDetailSheet";
 import { BottomTabBar } from "./components/BottomTabBar";
 import { AnimatedSplash } from "./components/SplashScreen";
+import { RestaurantCardSkeleton } from "./components/RestaurantCard";
 
-// Screens
+// Code-split heavy modals and overlays
+const SearchOverlay = lazy(() => import("./components/SearchOverlay").then(m => ({ default: m.SearchOverlay })));
+const RateSheet = lazy(() => import("./components/RateSheet").then(m => ({ default: m.RateSheet })));
+const RestaurantDetailSheet = lazy(() => import("./components/RestaurantDetailSheet").then(m => ({ default: m.RestaurantDetailSheet })));
+
+// Primary screen loaded statically
 import { ListTab } from "./screens/ListTab";
-import { ProfileTab } from "./screens/ProfileTab";
-import { CalendarTab } from "./screens/CalendarTab";
-import { SpinTab } from "./screens/SpinTab";
-import { AuthScreen } from "./screens/AuthScreen";
-import { OnboardingScreen } from "./screens/OnboardingScreen";
+
+// Secondary screens code-split to remove Mapbox and heavy bundles from the initial load
+const ProfileTab = lazy(() => import("./screens/ProfileTab").then(m => ({ default: m.ProfileTab })));
+const CalendarTab = lazy(() => import("./screens/CalendarTab").then(m => ({ default: m.CalendarTab })));
+const SpinTab = lazy(() => import("./screens/SpinTab").then(m => ({ default: m.SpinTab })));
+const PassportTab = lazy(() => import("./screens/PassportTab").then(m => ({ default: m.PassportTab })));
+const AuthScreen = lazy(() => import("./screens/AuthScreen").then(m => ({ default: m.AuthScreen })));
+const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen").then(m => ({ default: m.OnboardingScreen })));
+const UpdatePasswordScreen = lazy(() => import("./screens/UpdatePasswordScreen").then(m => ({ default: m.UpdatePasswordScreen })));
 // ─── Supabase helpers ────────────────────────────────────────
 async function fetchGroups(): Promise<Group[]> {
   const { data, error } = await supabase
@@ -44,10 +52,11 @@ export type FetchRestaurantsOptions = {
   filterVibes?: string[];
   sortBy?: SortOption;
   restaurantId?: number;
+  all?: boolean;
 };
 
 export async function fetchRestaurants({
-  uid, groupId, pageParam, filterTab, filterCategory, filterVibes, sortBy, restaurantId
+  uid, groupId, pageParam, filterTab, filterCategory, filterVibes, sortBy, restaurantId, all
 }: FetchRestaurantsOptions): Promise<{ restaurants: Restaurant[], nextCursor: string | null }> {
   if (!uid) return { restaurants: [], nextCursor: null };
 
@@ -82,6 +91,8 @@ export async function fetchRestaurants({
       query = query.or("primary_type.ilike.%cafe%,primary_type.ilike.%coffee%,primary_type.ilike.%tea%,name.ilike.%coffee%");
     } else if (c === "ice cream & dessert") {
       query = query.or("primary_type.ilike.%ice_cream%,primary_type.ilike.%dessert%,name.ilike.%ice cream%,name.ilike.%gelato%");
+    } else if (c === "restaurants") {
+      query = query.or("primary_type.ilike.%restaurant%,primary_type.ilike.%food%,primary_type.ilike.%diner%");
     }
   }
 
@@ -96,25 +107,28 @@ export async function fetchRestaurants({
   // If using cursor pagination, we filter by created_at. (Requires created_at ordering)
   // For sorting by rating, pagination needs an offset or cursor on rating. 
   // To keep it simple, we'll use offset if sorting by rating, or cursor if newest.
-  // Actually, since we don't have an exact offset from pageParam, we can just use range.
-  const PAGE_SIZE = 50;
+  // When all is true (e.g. for Mapbox & Calendar), fetch up to 1000 items so the full map is populated
+  const PAGE_SIZE = all ? 1000 : 20;
   const pageIndex = pageParam ? parseInt(pageParam, 10) : 0;
   query = query.range(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE - 1);
 
-  const { data, error } = await query;
+  // Parallelize group members lookup with the primary restaurants query to eliminate waterfalls
+  const membersPromise = groupId 
+    ? supabase.from("group_members").select("user_id").eq("group_id", groupId) 
+    : Promise.resolve({ data: [] });
+
+  const [{ data, error }, membersRes] = await Promise.all([query, membersPromise]);
 
   if (error) throw error;
   if (!data || data.length === 0) return { restaurants: [], nextCursor: null };
 
   const nextCursor = data.length === PAGE_SIZE ? (pageIndex + 1).toString() : null;
 
-  // Fetch verified members and reviews in parallel to eliminate the network waterfall!
+  // Fetch reviews using the retrieved placeIds
   const placeIds = data.map((r: any) => r.place_id).filter(Boolean);
-
-  const [membersRes, globalReviewsRes] = await Promise.all([
-    groupId ? supabase.from("group_members").select("user_id").eq("group_id", groupId) : Promise.resolve({ data: [] }),
-    placeIds.length > 0 ? supabase.from("reviews").select("*").in("place_id", placeIds) : Promise.resolve({ data: [], error: null })
-  ]);
+  const globalReviewsRes = placeIds.length > 0 
+    ? await supabase.from("reviews").select("*").in("place_id", placeIds) 
+    : { data: [], error: null };
 
   const activeGroupMembers = membersRes.data ? membersRes.data.map(m => m.user_id) : [];
   if (globalReviewsRes.error) throw globalReviewsRes.error;
@@ -168,11 +182,25 @@ export async function fetchRestaurants({
       }
     });
 
-    // Squad Approach: Only consider it "visited" for the group if all members have submitted a review
-    const validGroupUsers = new Set(activeGroupMembers);
-    validGroupUsers.add(uid); // Ensure current user is always counted in the threshold
-    const uniqueReviewers = new Set(reviews.map((rev: any) => rev.user_id));
-    const consensusReached = validGroupUsers.size > 0 && uniqueReviewers.size >= validGroupUsers.size;
+    // Squad / Personal status: A restaurant is visited if marked in DB, or if reviewed by anyone/current user
+    const isVisited = !!r.visited || reviews.length > 0 || !!myReview;
+
+    // Strict Filter: Never show already-visited/reviewed restaurants on the Cravelist (wishlist)
+    if (filterTab === "cravelist" && isVisited) {
+      return null;
+    }
+    // Strict Filter: Never show unvisited restaurants in the tried / nostalgia pool
+    if (filterTab === "tried" && !isVisited) {
+      return null;
+    }
+
+    const parsedVibes = typeof r.vibes === "string" ? JSON.parse(r.vibes) : r.vibes || [];
+    if (filterVibes && filterVibes.length > 0) {
+      const hasVibe = filterVibes.some((v: string) =>
+        parsedVibes.map((pv: string) => pv.toLowerCase()).includes(v.toLowerCase())
+      );
+      if (!hasVibe) return null;
+    }
 
     return {
       id: r.id,
@@ -190,19 +218,17 @@ export async function fetchRestaurants({
       websiteUrl: r.website_url ?? null,
       bookingPlatform: r.booking_platform ?? null,
       bookingUrl: r.booking_url ?? null,
-      vibes: typeof r.vibes === "string" ? JSON.parse(r.vibes) : r.vibes || [],
+      vibes: parsedVibes,
       // Use parsed JSON mapping for the arrays natively
       openingHours: typeof r.opening_hours === "string" ? JSON.parse(r.opening_hours) : r.opening_hours || null,
       lastSyncedAt: r.last_synced_at ?? null,
 
-      // Fallback to r.visited for legacy instances, otherwise dynamically bind to Group Consensus!
-      visited: !!r.visited || consensusReached,
+      visited: isVisited,
       userScore: myReview?.score ?? null,
       notes: myReview?.notes ?? null,
       visitPhotoUrl: myReview?.photo_url ?? null,
       visitPhotoUrls: myReview?.photo_urls || [],
       visitedAt: myReview?.created_at ?? null,
-
 
       reviews: reviews,
       allVisitPhotos: allVisitPhotos,
@@ -210,7 +236,7 @@ export async function fetchRestaurants({
 
       createdAt: r.created_at,
     };
-  });
+  }).filter(Boolean) as Restaurant[];
 
   return { restaurants, nextCursor };
 }
@@ -231,6 +257,50 @@ const getGroupInitials = (name: string) => {
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return "✨";
 };
+
+function AppShellSkeleton() {
+  return (
+    <div className="h-screen w-full flex flex-col bg-background text-foreground animate-pulse">
+      {/* Header Skeleton */}
+      <header className="px-4 pt-safe-or-4 pb-4 flex items-center justify-between gap-3 border-b border-border/50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full bg-secondary/80" />
+          <div className="h-5 w-24 bg-secondary/80 rounded-md" />
+        </div>
+        <div className="w-9 h-9 rounded-full bg-secondary/80" />
+      </header>
+
+      {/* Tabs & Filter Pill Skeletons */}
+      <div className="px-4 pt-4 pb-2 space-y-3">
+        <div className="flex justify-center">
+          <div className="h-10 w-48 bg-secondary/70 rounded-full" />
+        </div>
+        <div className="flex gap-2 overflow-hidden">
+          <div className="h-8 w-24 bg-secondary/60 rounded-full shrink-0" />
+          <div className="h-8 w-24 bg-secondary/60 rounded-full shrink-0" />
+          <div className="h-8 w-24 bg-secondary/60 rounded-full shrink-0" />
+        </div>
+      </div>
+
+      {/* Restaurant Card Skeletons */}
+      <div className="flex-1 px-4 py-2 space-y-4 overflow-hidden">
+        {[1, 2, 3, 4].map((i) => (
+          <RestaurantCardSkeleton key={i} />
+        ))}
+      </div>
+
+      {/* Bottom Bar Skeleton */}
+      <div className="h-20 border-t border-border/50 flex items-center justify-around px-6 bg-background/80">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex flex-col items-center gap-1.5">
+            <div className="w-6 h-6 rounded-full bg-secondary/80" />
+            <div className="w-8 h-2 rounded bg-secondary/60" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════
 // Main App Shell
@@ -303,7 +373,24 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
     enabled: !!derivedGroupId && !!sessionUid
   });
 
-  // 3. Unlinked Background Global Sync for Search Dedupe & Stats
+  // Defer heavy background syncs until the main UI has successfully loaded its primary data
+  // This prevents connection pooling bottlenecks and massive network waterfalls on app launch!
+  const isMainUIReady = restaurantsQuery.isSuccess;
+
+  // Track visited tabs so off-screen tabs and heavy modules (like Mapbox) only load on demand
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set([activeTab]));
+
+  const handleTabChange = (tab: TabId) => {
+    setActiveTab(tab);
+    setVisitedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+  };
+
+  // 3. Background Global Sync for Search Dedupe & Stats - only active when Search is invoked
   const globalRestaurantsQuery = useInfiniteQuery({
     queryKey: ["restaurants", "global", sessionUid],
     queryFn: ({ pageParam }) => fetchRestaurants({
@@ -312,8 +399,84 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
     }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: !!sessionUid,
+    enabled: !!sessionUid && isMainUIReady && showSearch,
   });
+
+  // 4. Workspace ALL query (for Passport & Calendar) - only active when user visits Passport or Calendar!
+  const shouldFetchWorkspaceAll = visitedTabs.has("passport") || visitedTabs.has("calendar");
+  const workspaceAllRestaurantsQuery = useInfiniteQuery({
+    queryKey: ["restaurants", "workspace-all", sessionUid, derivedGroupId],
+    queryFn: ({ pageParam }) => fetchRestaurants({
+      uid: sessionUid,
+      groupId: derivedGroupId!,
+      pageParam: pageParam as string | null,
+      all: true,
+    }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: !!derivedGroupId && !!sessionUid && isMainUIReady && shouldFetchWorkspaceAll,
+  });
+
+  // 🩺 Self-healing sync: Ensure any restaurant with reviews in the database has visited = true
+  useEffect(() => {
+    if (!sessionUid) return;
+    const healVisited = async () => {
+      try {
+        const { data: revs } = await supabase.from("reviews").select("place_id");
+        if (!revs || revs.length === 0) return;
+        const placeIds = Array.from(new Set(revs.map((r: any) => r.place_id)));
+        const { data: updated } = await supabase
+          .from("restaurants")
+          .update({ visited: true })
+          .in("place_id", placeIds)
+          .eq("visited", false)
+          .select("id");
+        if (updated && updated.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+        }
+      } catch (e) {
+        console.error("Heal visited error:", e);
+      }
+    };
+    healVisited();
+  }, [sessionUid, queryClient]);
+
+  // ⚡️ IDLE PREFETCHING: Pre-warm code chunks & cache silently during idle time once the list is ready!
+  useEffect(() => {
+    if (!isMainUIReady || !derivedGroupId) return;
+
+    const warmBackgroundTabs = () => {
+      // 1. Silently download code chunks into HTTP cache in the background
+      import("./screens/PassportTab");
+      import("./screens/ProfileTab");
+      import("./screens/SpinTab");
+      import("./screens/CalendarTab");
+      import("./components/SearchOverlay");
+      import("./components/RestaurantDetailSheet");
+
+      // 2. Silently pre-warm the React Query cache for workspace restaurants (Passport / Calendar)
+      queryClient.prefetchInfiniteQuery({
+        queryKey: ["restaurants", "workspace-all", sessionUid, derivedGroupId],
+        queryFn: ({ pageParam }) => fetchRestaurants({
+          uid: sessionUid,
+          groupId: derivedGroupId,
+          pageParam: pageParam as string | null,
+          all: true,
+        }),
+        initialPageParam: null as string | null,
+      });
+    };
+
+    // Use requestIdleCallback if available, fallback to 1200ms timeout for Safari
+    const win = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (typeof win.requestIdleCallback === "function") {
+      const handle = win.requestIdleCallback(warmBackgroundTabs, { timeout: 2500 });
+      return () => win.cancelIdleCallback?.(handle);
+    } else {
+      const timer = setTimeout(warmBackgroundTabs, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [isMainUIReady, derivedGroupId, sessionUid, queryClient]);
 
   const removeMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -334,8 +497,9 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
 
   const activeGroup = groupsQuery.data?.find(g => g.id === derivedGroupId);
 
-  const allRestaurants: Restaurant[] = restaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [];
-  const allGlobalRestaurants: Restaurant[] = globalRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [];
+  const allRestaurants: Restaurant[] = useMemo(() => restaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [restaurantsQuery.data]);
+  const allGlobalRestaurants: Restaurant[] = useMemo(() => globalRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [globalRestaurantsQuery.data]);
+  const workspaceAllRestaurants: Restaurant[] = useMemo(() => workspaceAllRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [workspaceAllRestaurantsQuery.data]);
 
   // Automatically bind the actively viewed card to the React Query cache
   // This physically updates the open modal the second polling detects your lover rated it!
@@ -343,22 +507,32 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
     ? allRestaurants.find(r => r.id === detailRestaurant.id) || detailRestaurant
     : null;
 
-  if (showSearch) return <SearchOverlay activeGroupId={derivedGroupId!} globalRestaurants={allGlobalRestaurants} groups={groupsQuery.data || []} onSave={() => setShowSearch(false)} onClose={() => setShowSearch(false)} />;
+  if (showSearch) {
+    return (
+      <Suspense fallback={<div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"><AppShellSkeleton /></div>}>
+        <SearchOverlay activeGroupId={derivedGroupId!} globalRestaurants={allGlobalRestaurants} groups={groupsQuery.data || []} onSave={() => setShowSearch(false)} onClose={() => setShowSearch(false)} />
+      </Suspense>
+    );
+  }
 
   // Wait for background validation before blindly rendering empty states from old caches
+  // We only hold for group data to prevent crashing. Restaurant loading is handled gracefully by the tabs.
   const isHoldingForData = 
     groupsQuery.isLoading || 
-    (groupsQuery.isFetching && groupsQuery.data?.length === 0) ||
-    (derivedGroupId && restaurantsQuery.isLoading);
+    (groupsQuery.isFetching && groupsQuery.data?.length === 0);
 
   if (isHoldingForData) {
-    return <div className="h-screen w-full bg-slate-50" />;
+    return <AppShellSkeleton />;
   }
 
   // 🚀 New User Onboarding Interceptor
   // If the user has strictly zero groups, violently intercept the app shell to force list creation!
   if (groupsQuery.isSuccess && groupsQuery.data.length === 0) {
-    return <OnboardingScreen onComplete={() => queryClient.invalidateQueries({ queryKey: ["groups"] })} />;
+    return (
+      <Suspense fallback={<AppShellSkeleton />}>
+        <OnboardingScreen onComplete={() => queryClient.invalidateQueries({ queryKey: ["groups"] })} />
+      </Suspense>
+    );
   }
 
   return (
@@ -368,7 +542,7 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
       `}</style>
 
       {/* Tab content */}
-      {activeTab === "list" && (
+      <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "list" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
         <ListTab 
           restaurants={allRestaurants} 
           onDetail={setDetailRestaurant}
@@ -376,6 +550,7 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
           fetchNextPage={() => restaurantsQuery.fetchNextPage()}
           hasNextPage={!!restaurantsQuery.hasNextPage}
           isFetchingNextPage={restaurantsQuery.isFetchingNextPage}
+          isLoading={restaurantsQuery.isLoading}
           filterTab={filterTab}
           setFilterTab={setFilterTab}
           filterCategory={filterCategory}
@@ -390,46 +565,76 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
           showWorkspaceDropdown={showWorkspaceDropdown}
           setShowWorkspaceDropdown={setShowWorkspaceDropdown}
         />
+      </div>
+
+      {visitedTabs.has("profile") && (
+        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "profile" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
+          <Suspense fallback={<AppShellSkeleton />}>
+            <ProfileTab />
+          </Suspense>
+        </div>
       )}
-      {activeTab === "profile" && (
-        <ProfileTab />
+
+      {visitedTabs.has("calendar") && (
+        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "calendar" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
+          <Suspense fallback={<AppShellSkeleton />}>
+            <CalendarTab 
+              restaurants={workspaceAllRestaurants} 
+              onDetail={setDetailRestaurant} 
+              groups={groupsQuery.data || []}
+              fetchNextPage={() => workspaceAllRestaurantsQuery.fetchNextPage()}
+              hasNextPage={!!workspaceAllRestaurantsQuery.hasNextPage}
+              isFetchingNextPage={workspaceAllRestaurantsQuery.isFetchingNextPage}
+            />
+          </Suspense>
+        </div>
       )}
-      {activeTab === "calendar" && (
-        <CalendarTab 
-          restaurants={allGlobalRestaurants} 
-          onDetail={setDetailRestaurant} 
-          groups={groupsQuery.data || []}
-          fetchNextPage={() => globalRestaurantsQuery.fetchNextPage()}
-          hasNextPage={!!globalRestaurantsQuery.hasNextPage}
-          isFetchingNextPage={globalRestaurantsQuery.isFetchingNextPage}
-        />
+
+      {visitedTabs.has("passport") && (
+        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "passport" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
+          <Suspense fallback={<AppShellSkeleton />}>
+            <PassportTab 
+              restaurants={workspaceAllRestaurants} 
+              onQuickStamp={() => setShowSearch(true)}
+            />
+          </Suspense>
+        </div>
       )}
-      {activeTab === "spin" && (
-        <SpinTab onDetail={setDetailRestaurant} groupId={derivedGroupId!} />
+
+      {visitedTabs.has("spin") && (
+        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "spin" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
+          <Suspense fallback={<AppShellSkeleton />}>
+            <SpinTab onDetail={setDetailRestaurant} groupId={derivedGroupId!} />
+          </Suspense>
+        </div>
       )}
 
       {/* Bottom tab bar */}
-      <BottomTabBar active={activeTab} onChange={setActiveTab} />
+      <BottomTabBar active={activeTab} onChange={handleTabChange} />
 
       {/* Detail sheet */}
       {syncedDetailRestaurant && (
-        <RestaurantDetailSheet
-          restaurant={syncedDetailRestaurant}
-          onRate={(r) => setRatingRestaurant(r)}
-          onRemove={(id) => { removeMutation.mutate(id); setDetailRestaurant(null); }}
-          onClose={() => setDetailRestaurant(null)}
-          myUid={sessionUid}
-        />
+        <Suspense fallback={null}>
+          <RestaurantDetailSheet
+            restaurant={syncedDetailRestaurant}
+            onRate={(r) => setRatingRestaurant(r)}
+            onRemove={(id) => { removeMutation.mutate(id); setDetailRestaurant(null); }}
+            onClose={() => setDetailRestaurant(null)}
+            myUid={sessionUid}
+          />
+        </Suspense>
       )}
 
       {/* Rate sheet */}
-      {ratingRestaurant && <RateSheet restaurant={ratingRestaurant} onClose={() => setRatingRestaurant(null)} />}
+      {ratingRestaurant && (
+        <Suspense fallback={null}>
+          <RateSheet restaurant={ratingRestaurant} onClose={() => setRatingRestaurant(null)} />
+        </Suspense>
+      )}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Default Export (with auth gate)
 // ═══════════════════════════════════════════════════════════════
 const appQueryClient = new QueryClient({
   defaultOptions: {
@@ -448,44 +653,75 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-  const [isInjectingLogin, setIsInjectingLogin] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(() => window.location.hash.includes("type=recovery"));
   const hasBooted = useRef(false);
 
   useEffect(() => {
     // Lock orientation to vertical (portrait) for native mobile
     ScreenOrientation.lock({ orientation: "portrait" }).catch(() => { });
 
+    const processHash = async (hash: string) => {
+      if (hash.includes("access_token=") && hash.includes("type=recovery")) {
+        const params = new URLSearchParams(hash.replace('#', '?'));
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token });
+          setIsRecoveryMode(true);
+          window.location.hash = "";
+        }
+      } else if (hash.includes("type=recovery")) {
+        setIsRecoveryMode(true);
+      }
+    };
+
+    // Check initial load
+    if (window.location.hash) {
+      processHash(window.location.hash);
+    }
+
+    const handleHashChange = () => processHash(window.location.hash);
+    window.addEventListener("hashchange", handleHashChange);
+
+    // Handle native deep linking from emails
+    const deepLinkListener = CapacitorApp.addListener('appUrlOpen', data => {
+      if (data.url.includes("type=recovery")) {
+        const urlObj = new URL(data.url);
+        processHash(urlObj.hash);
+      }
+    });
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (s) hasBooted.current = true;
       setSession(s);
+    }).catch((err) => {
+      console.error("Failed to get session", err);
+      setSession(null);
+    }).finally(() => {
       setLoading(false);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, s) => {
-      // Supabase natively forces a background refresh ping when iOS apps restore from background.
-      // We block the animation sequence by explicitly referencing the mutable ref `hasBooted`
-      // instead of checking `!session`, since React useEffect closures trap stale state!
-      if (event === "SIGNED_IN" && !hasBooted.current) {
-        hasBooted.current = true;
-        
-        // Trigger cinematic fade-out of Auth Screen
-        setIsInjectingLogin(true);
-        setTimeout(() => {
-          setSession(s); // Swap the DOM memory payload while screen is invisible
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecoveryMode(true);
+      }
 
-          // Wait 50ms for React DOM to paint the invisible CraveApp, then trigger the fade-in
-          setTimeout(() => {
-            setIsInjectingLogin(false);
-          }, 50);
-        }, 1000); // 1-second delay
+      // Update session immediately with zero artificial delay for instant responsiveness
+      if (event === "SIGNED_IN") {
+        hasBooted.current = true;
+        setSession(s);
       } else {
         setSession(s);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("hashchange", handleHashChange);
+      deepLinkListener.then(listener => listener.remove());
+    };
   }, []);
 
   return (
@@ -494,11 +730,21 @@ export default function App() {
 
       {!loading && (
         <div className={`h-full w-full origin-center 
-          transition-all ease-out
-          ${!showSplash ? "opacity-100 scale-100 duration-1000" : "opacity-0 scale-[0.92] pointer-events-none"} 
-          ${isInjectingLogin ? "!opacity-0 !scale-[0.97] !duration-[800ms]" : "duration-1000"}
+          transition-all ease-out duration-300
+          ${!showSplash ? "opacity-100 scale-100" : "opacity-0 scale-[0.98] pointer-events-none"} 
         `}>
-          {session ? <CraveApp sessionUid={session.user.id} /> : <AuthScreen />}
+          <Suspense fallback={<AppShellSkeleton />}>
+            {isRecoveryMode ? (
+              <UpdatePasswordScreen onComplete={() => {
+                setIsRecoveryMode(false);
+                window.location.hash = ""; // Clear hash after success
+              }} />
+            ) : session ? (
+              <CraveApp sessionUid={session.user.id} />
+            ) : (
+              <AuthScreen />
+            )}
+          </Suspense>
         </div>
       )}
     </PersistQueryClientProvider>

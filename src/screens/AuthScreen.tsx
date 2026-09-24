@@ -10,10 +10,12 @@ export function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
+    setMessage(null);
     try {
       if (isSignUp) {
         if (!firstName || !lastName) {
@@ -34,6 +36,27 @@ export function AuthScreen() {
       // Cache email natively via localStorage to reduce future friction!
       localStorage.setItem("crave_last_email", email);
 
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError("Please enter your email address first");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: "craveapp://reset-password",
+      });
+      if (err) throw err;
+      setMessage("Check your email for the password reset link!");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -93,21 +116,34 @@ export function AuthScreen() {
               placeholder="Password"
             />
           </div>
+
+          {!isSignUp && (
+            <div className="flex justify-end px-2 pt-1">
+              <button 
+                onClick={handleResetPassword}
+                disabled={loading}
+                className="text-sm font-semibold text-primary hover:underline transition-all"
+              >
+                Forgot Password?
+              </button>
+            </div>
+          )}
         </div>
 
         {error && <p className="text-destructive text-sm font-bold mt-4 w-full text-center">{error}</p>}
+        {message && <p className="text-primary text-sm font-bold mt-4 w-full text-center">{message}</p>}
 
         <button 
           onClick={handleSubmit} 
           disabled={loading || !email || !password}
-          className="w-full py-5 rounded-[2.5rem] bg-primary text-primary-foreground font-bold text-[18px] shadow-2xl shadow-primary/40 mt-8 active:scale-[0.98] transition-all disabled:opacity-50"
+          className="w-full py-5 rounded-[2.5rem] bg-primary text-primary-foreground font-bold text-[18px] shadow-2xl shadow-primary/40 mt-6 active:scale-[0.98] transition-all disabled:opacity-50"
         >
           {loading ? "Please wait..." : isSignUp ? "Sign Up" : "Sign In"}
         </button>
         
         <button 
-          onClick={() => { setIsSignUp(!isSignUp); setError(null); }}
-          className="mt-8 text-[15px] font-semibold text-primary hover:underline transition-all"
+          onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null); }}
+          className="mt-6 text-[15px] font-semibold text-muted-foreground hover:text-foreground transition-all"
         >
           {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
         </button>

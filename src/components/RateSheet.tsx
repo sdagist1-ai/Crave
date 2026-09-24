@@ -165,8 +165,8 @@ export function RateSheet({ restaurant, onClose }: { restaurant: Restaurant; onC
 
       if (reqError) throw reqError;
       
-      // 4. Trigger the RPC to check and update the "visited" group consensus
-      await supabase.rpc("check_and_update_visited_status", { p_restaurant_id: restaurant.id });
+      // 4. Directly update the restaurant's visited flag in the database to true
+      await supabase.from("restaurants").update({ visited: true }).eq("id", restaurant.id);
       
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       onClose();

@@ -14,9 +14,10 @@ export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => vo
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [nostalgia, setNostalgia] = useState(false);
   const [spinning, setSpinning] = useState(false);
-  const [displayIndex, setDisplayIndex] = useState(0);
+  const [reelItems, setReelItems] = useState<Restaurant[]>([]);
   const [winner, setWinner] = useState<Restaurant | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const animRef = useRef<number | null>(null);
+  const reelRef = useRef<HTMLDivElement>(null);
 
   const PRIMARY_CATEGORIES = [
     { id: "Restaurants", label: "Restaurants", icon: "solar:chef-hat-linear" },
@@ -37,7 +38,8 @@ export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => vo
         groupId,
         filterTab: nostalgia ? "tried" : "cravelist",
         filterCategory,
-        filterVibes: selectedVibes
+        filterVibes: selectedVibes,
+        all: true
       });
     },
     enabled: !!groupId
@@ -46,84 +48,103 @@ export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => vo
   const pool = poolResp?.restaurants || [];
 
   const startSpin = async () => {
-    const hasFilters = nostalgia || filterCategory || selectedVibes.length > 0;
-    let trueWinner: Restaurant | null = null;
+    if (pool.length === 0) return;
 
-    if (!hasFilters) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const { data, error } = await supabase.rpc('get_random_restaurant', { p_group_id: groupId });
-        if (!error && data && data.length > 0 && user) {
-          const rawRow = data[0] as any;
-          const { restaurants } = await fetchRestaurants({
-            uid: user.id,
-            groupId,
-            restaurantId: rawRow.id
-          });
-          if (restaurants && restaurants.length > 0) {
-            trueWinner = restaurants[0];
-          }
-        }
-      } catch (e) {
-        console.error("RPC failed, falling back to local pool", e);
-      }
+    if (pool.length === 1) {
+      if (pool[0]) setWinner(pool[0]);
+      return;
     }
+    
+    // Ensure consecutive spins with pool > 1 do not immediately repeat the previous winner
+    const eligiblePool = (winner && pool.length > 1)
+      ? pool.filter(r => r.id !== winner.id)
+      : pool;
 
-    if (!trueWinner) {
-      if (pool.length < 2) {
-        if (pool.length === 1 && pool[0]) setWinner(pool[0]);
-        return;
-      }
-      const winnerIdx = Math.floor(Math.random() * pool.length);
-      trueWinner = pool[winnerIdx] || null;
-    }
+    // Cryptographically uniform random selection across the entire eligible pool
+    const randomBuffer = new Uint32Array(1);
+    crypto.getRandomValues(randomBuffer);
+    const randomFraction = randomBuffer[0] / (0xffffffff + 1);
+    const winnerIdx = Math.floor(randomFraction * eligiblePool.length);
+    const trueWinner = eligiblePool[winnerIdx] || null;
 
     if (!trueWinner) return;
 
-    setWinner(null);
-    setSpinning(true);
-
-    let tick = 0;
-    const totalTicks = 40 + Math.floor(Math.random() * 20);
-    let speed = 40;
-
-    const runTick = () => {
-      tick++;
-      setDisplayIndex((prev) => (prev + 1) % pool.length);
-      Haptics.impact({ style: ImpactStyle.Light }).catch(() => { });
-
-      if (tick >= totalTicks) {
-        setSpinning(false);
-        if (trueWinner) {
-          setWinner(trueWinner);
-          const idx = pool.findIndex(r => r.id === trueWinner!.id);
-          if (idx !== -1) setDisplayIndex(idx);
-        }
-
-        Haptics.notification({ type: NotificationType.Success }).catch(() => { });
-        confetti({
-          particleCount: 150,
-          spread: 80,
-          origin: { y: 0.6 },
-          colors: ['#ff453a', '#ffd60a', '#0a84ff', '#32ade6']
-        });
-        return;
+    // Fisher-Yates shuffle helper for true unbiased reel randomness
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
       }
-
-      if (tick > totalTicks * 0.4) {
-        speed = speed * 1.08;
-      }
-      intervalRef.current = setTimeout(runTick, speed);
+      return a;
     };
 
-    intervalRef.current = setTimeout(runTick, speed);
+    // Generate reel of at least 30 items for a long spin
+    let tempReel = shuffle(pool);
+    while (tempReel.length < 30) {
+      tempReel = [...tempReel, ...shuffle(pool)];
+    }
+    // Remove all instances of the winner so we can strictly place it at the very end
+    tempReel = tempReel.filter(r => r.id !== trueWinner.id);
+    tempReel.push(trueWinner);
+    
+    setWinner(null);
+    setReelItems(tempReel);
+    setSpinning(true);
+
+    // Wait a frame for React to mount the reel DOM nodes
+    setTimeout(() => {
+      const targetY = - (tempReel.length - 1) * 192; // 192px is w-48 h-48 in Tailwind
+      const duration = 4000 + Math.random() * 1000; // 4 to 5 seconds spin
+      const startTime = performance.now();
+      let lastCrossedIndex = 0;
+
+      // Quartic easing out for a dramatic, mechanical slow down
+      const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+
+      const animate = (time: number) => {
+        const elapsed = time - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuart(progress);
+        const currentY = easedProgress * targetY;
+        
+        if (reelRef.current) {
+          reelRef.current.style.transform = `translateY(${currentY}px)`;
+          // Dynamic motion blur based on speed
+          const speed = 1 - progress;
+          reelRef.current.style.filter = speed > 0.2 ? `blur(${speed * 4}px)` : 'none';
+        }
+
+        // Mechanical tick haptics exactly as cards cross the center
+        const currentIndex = Math.floor(Math.abs(currentY) / 192);
+        if (currentIndex > lastCrossedIndex && progress < 0.98) {
+          lastCrossedIndex = currentIndex;
+          Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+        }
+
+        if (progress < 1) {
+          animRef.current = requestAnimationFrame(animate);
+        } else {
+          setSpinning(false);
+          setWinner(trueWinner);
+          Haptics.notification({ type: NotificationType.Success }).catch(() => {});
+          confetti({
+            particleCount: 150,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#ff453a', '#ffd60a', '#0a84ff', '#32ade6']
+          });
+        }
+      };
+      animRef.current = requestAnimationFrame(animate);
+    }, 50);
   };
 
   useEffect(() => {
-    return () => { if (intervalRef.current) clearTimeout(intervalRef.current); };
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, []);
 
-  const currentRestaurant = (winner && !spinning) ? winner : pool[displayIndex];
+
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans overflow-hidden">
@@ -161,19 +182,22 @@ export function SpinTab({ onDetail, groupId }: { onDetail: (r: Restaurant) => vo
               </>
             ) : (
               <>
-                {currentRestaurant?.photoUrl ? (
-                  <img src={currentRestaurant.photoUrl} alt={currentRestaurant.name} className={`w-full h-full object-cover transition-opacity duration-75 ${spinning ? "opacity-70 blur-[2px] scale-110" : "opacity-100"}`} />
-                ) : (
-                  <div className="w-full h-full bg-secondary flex items-center justify-center">
-                    <Icon icon="solar:chef-hat-linear" className="text-muted-foreground size-12" />
-                  </div>
-                )}
-                {winner && <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent" />}
-                {spinning && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <Icon icon="solar:spinner-broken-linear" className="animate-spin text-white size-12" />
-                  </div>
-                )}
+                <div ref={reelRef} className="absolute top-0 left-0 w-full flex flex-col will-change-transform">
+                  {reelItems.map((r, i) => (
+                    <div key={`${r.id}-${i}`} className="w-48 h-48 shrink-0 flex items-center justify-center relative">
+                      {r.photoUrl ? (
+                        <img src={r.photoUrl} alt={r.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-secondary flex items-center justify-center">
+                          <Icon icon="solar:chef-hat-linear" className="text-muted-foreground size-12" />
+                        </div>
+                      )}
+                      {/* Premium gradient overlay over the image */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
+                    </div>
+                  ))}
+                </div>
+                {winner && <div className="absolute inset-0 bg-gradient-to-t from-primary/30 to-transparent pointer-events-none transition-opacity duration-1000" />}
               </>
             )}
           </div>

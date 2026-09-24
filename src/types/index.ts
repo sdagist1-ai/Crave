@@ -62,6 +62,6 @@ export type Restaurant = {
   createdAt: string;
 };
 
-export type TabId = "list" | "profile" | "calendar" | "spin";
+export type TabId = "list" | "profile" | "calendar" | "spin" | "passport";
 
 export type SortOption = "newest" | "rating" | "score" | "visited";
