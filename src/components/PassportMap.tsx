@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import Map, { GeolocateControl, Marker, Popup, type MapRef } from "react-map-gl/mapbox";
+import Map, { Marker, Popup, type MapRef } from "react-map-gl/mapbox";
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { Maximize2, UtensilsCrossed, X } from "lucide-react";
+import { LocateFixed, Maximize2, UtensilsCrossed, X } from "lucide-react";
 import type { Restaurant } from "../types";
 import { Segmented } from "./ui";
 
@@ -17,6 +19,29 @@ export default function PassportMap({ places, onOpen, onClose }: {
   const mapRef = useRef<MapRef>(null);
   const [mode, setMode] = useState<Mode>("tried");
   const [selected, setSelected] = useState<Restaurant | null>(null);
+  const [me, setMe] = useState<{ lng: number; lat: number } | null>(null);
+  const [locNote, setLocNote] = useState<string | null>(null);
+
+  // Uses the native location permission, which Crave already has. Mapbox's own
+  // GeolocateControl goes through the WebView, and iOS then asks a second time
+  // on behalf of "localhost" (the app's internal web address).
+  const locate = async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        let { location } = await Geolocation.checkPermissions();
+        if (location !== "granted") ({ location } = await Geolocation.requestPermissions({ permissions: ["location"] }));
+        if (location !== "granted") throw new Error("denied");
+      }
+      const { coords } = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10_000 });
+      const here = { lng: coords.longitude, lat: coords.latitude };
+      setMe(here);
+      setSelected(null);
+      mapRef.current?.flyTo({ center: [here.lng, here.lat], zoom: Math.max(mapRef.current.getZoom(), 13), duration: 700 });
+    } catch {
+      setLocNote("Turn on location for Crave in Settings");
+      setTimeout(() => setLocNote(null), 2500);
+    }
+  };
 
   const shown = useMemo(
     () => places.filter((p) => (mode === "tried" ? p.visited : !p.visited) && (p.latitude || p.longitude)),
@@ -61,7 +86,11 @@ export default function PassportMap({ places, onOpen, onClose }: {
         onClick={() => setSelected(null)}
         style={{ width: "100%", height: "100%" }}
       >
-        <GeolocateControl position="bottom-right" style={{ marginBottom: 110, marginRight: 16 }} />
+        {me && (
+          <Marker longitude={me.lng} latitude={me.lat}>
+            <span aria-label="You are here" className="block h-4 w-4 rounded-full border-[3px] border-white bg-[#3b82f6] shadow-[0_0_0_6px_rgba(59,130,246,0.25)]" />
+          </Marker>
+        )}
 
         {shown.map((r) => (
           <Marker key={r.id} longitude={r.longitude} latitude={r.latitude} anchor="bottom"
@@ -109,6 +138,16 @@ export default function PassportMap({ places, onOpen, onClose }: {
           />
         </div>
       </div>
+
+      <button type="button" onClick={locate} aria-label="Show my location"
+        className="absolute right-4 bottom-safe flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-ink shadow-float">
+        <LocateFixed size={20} />
+      </button>
+      {locNote && (
+        <div role="status" className="absolute inset-x-0 bottom-[calc(max(env(safe-area-inset-bottom,0px),16px)+56px)] mx-auto w-fit rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white animate-fade-in">
+          {locNote}
+        </div>
+      )}
 
       {shown.length > 1 && (
         <button type="button" onClick={() => fitAll()}
