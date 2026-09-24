@@ -7,7 +7,7 @@
 // search reliable on device.
 //
 // POST { action: "search", query, lat?, lng? }  -> { places: PlaceResult[] }
-// POST { action: "details", placeId }           -> { openingHours, photoName }
+// POST { action: "details", placeId }           -> { openingHours, photoName, rating, userRatingCount, priceLevel, city, area, countryCode }
 // POST { action: "photo", photoName, placeId }  -> { url }  (cached in Storage)
 // POST { action: "backfill_locations" }         -> { updated, remaining }
 //      Fills city/area/country_code for places saved before those columns
@@ -17,11 +17,15 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
 const PLACES = "https://places.googleapis.com/v1";
 
+// Search asks only for Pro-tier fields. Rating, price and opening hours would bill
+// every keystroke-search at the Enterprise rate; they're fetched once, with the
+// place's details, when someone picks a result.
 const SEARCH_FIELDS = [
-  "id", "displayName", "formattedAddress", "location", "rating", "userRatingCount",
-  "priceLevel", "primaryType", "photos", "currentOpeningHours", "regularOpeningHours",
-  "addressComponents",
+  "id", "displayName", "formattedAddress", "location", "primaryType", "photos", "addressComponents",
 ].map((f) => `places.${f}`).join(",");
+
+// Opening hours already make Details an Enterprise request, so rating and price come free with it.
+const DETAILS_FIELDS = "regularOpeningHours,photos,addressComponents,rating,userRatingCount,priceLevel";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -122,7 +126,7 @@ async function details(placeId: unknown) {
   }
 
   const res = await fetch(`${PLACES}/places/${placeId}`, {
-    headers: { "X-Goog-Api-Key": GOOGLE_KEY!, "X-Goog-FieldMask": "regularOpeningHours,photos,addressComponents" },
+    headers: { "X-Goog-Api-Key": GOOGLE_KEY!, "X-Goog-FieldMask": DETAILS_FIELDS },
   });
   if (!res.ok) {
     console.error("place details failed", res.status, await res.text());
@@ -133,6 +137,9 @@ async function details(placeId: unknown) {
   return json({
     openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
     photoName: place.photos?.[0]?.name ?? null,
+    rating: place.rating ?? null,
+    userRatingCount: place.userRatingCount ?? null,
+    priceLevel: place.priceLevel ?? null,
     ...locationOf(place),
   });
 }

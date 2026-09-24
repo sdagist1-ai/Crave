@@ -31,7 +31,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
   useEffect(() => {
     const age = r.lastSyncedAt ? (Date.now() - new Date(r.lastSyncedAt).getTime()) / 86_400_000 : Infinity;
     if (!r.openingHours || !r.countryCode || age >= SYNC_AFTER_DAYS) {
-      syncRestaurantData(r.placeId, r.id).then((ok) => {
+      syncRestaurantData(r.placeId, r.id, !!r.photoUrl).then((ok) => {
         if (ok) queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       });
     }
