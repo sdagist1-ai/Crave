@@ -34,6 +34,9 @@ p { text-wrap: balance; font-size: 50px; line-height: 1.3; color: #64748B; margi
 .screen { position: relative; border-radius: 124px; overflow: hidden; aspect-ratio: 924 / 2000; background: #fff; }
 .screen img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .status { position: absolute; inset: 0 0 auto; height: 5.2%; display: flex; align-items: center; justify-content: space-between; padding: 1.4% 9% 0 11%; font: 600 46px Geist; }
+.status.photo { color: #fff; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgba(0,0,0,.08) !important; }
+.status.photo g { fill: #fff; } .status.photo rect[fill=none] { stroke: #fff; }
+.patch { position: absolute; display: flex; align-items: center; font-family: Geist; white-space: nowrap; }
 .island { position: absolute; top: 2.1%; left: 50%; transform: translateX(-50%); width: 31%; height: 3.3%; border-radius: 999px; background: #000; }
 .chip { position: absolute; top: 960px; display: flex; align-items: center; gap: 16px; background: #fff; border-radius: 999px; padding: 30px 44px; font: 700 46px Geist;
   box-shadow: 0 30px 70px rgba(15,23,42,.18); border: 2px solid #E2E8F0; white-space: nowrap; }
@@ -44,7 +47,8 @@ p { text-wrap: balance; font-size: 50px; line-height: 1.3; color: #64748B; margi
 <div class="copy"><span class="eyebrow">${s.eyebrow}</span><h1>${s.title}</h1><p>${s.sub}</p></div>
 <div class="phone"><div class="screen">
   <img id="shot" src="${src}">
-  <div class="status" id="status"><span>9:41</span>
+  ${(s.patches ?? []).map((p, i) => `<div class="patch" data-i="${i}">${p.text}</div>`).join("")}
+  <div class="status ${s.status ?? ""}" id="status"><span>9:41</span>
     <svg width="150" height="40" viewBox="0 0 150 40"><g fill="#0F172A"><rect x="0" y="26" width="9" height="12" rx="2"/><rect x="13" y="19" width="9" height="19" rx="2"/><rect x="26" y="11" width="9" height="27" rx="2"/><rect x="39" y="3" width="9" height="35" rx="2"/>
     <path d="M75 36l-6-7a9 9 0 0112 0zM63 22a17 17 0 0124 0l-4 4a11 11 0 00-16 0zM57 15a26 26 0 0136 0l-4 4a20 20 0 00-28 0z"/>
     <rect x="102" y="6" width="40" height="28" rx="8" fill="none" stroke="#0F172A" stroke-width="3" opacity=".45"/><rect x="106" y="10" width="32" height="20" rx="5"/><rect x="144" y="15" width="4" height="10" rx="2" opacity=".45"/></g></svg></div>
@@ -69,20 +73,32 @@ for (const s of slides) {
   await page.goto(pathToFileURL(tmp).href, { waitUntil: "load" });
   await page.evaluate(() => document.fonts.ready);
   // Sit the phone just below the copy (headlines can run to two lines); chips follow it.
-  await page.evaluate(() => {
+  // chipY (optional, per slide) is the chip's offset from the top of the phone.
+  await page.evaluate((chipY) => {
     const top = document.querySelector(".copy").getBoundingClientRect().bottom + 80;
     document.querySelector(".phone").style.top = `${top}px`;
     const chip = document.querySelector(".chip");
-    chip.style.top = `${top + (chip.classList.contains("left") ? 700 : 240)}px`;
-  });
+    chip.style.top = `${top + (chipY ?? (chip.classList.contains("left") ? 700 : 240))}px`;
+  }, s.chipY);
   // Cover the real status bar with a clean 9:41 one in the screenshot's own background colour.
-  await page.evaluate(() => {
+  // Patches replace text in the screenshot (e.g. a name): each covers a box, in the
+  // screenshot's own pixels, with the colour just inside its top-left corner.
+  await page.evaluate((patches) => {
     const img = document.getElementById("shot"), c = document.createElement("canvas");
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const W = img.naturalWidth, H = img.naturalHeight, k = img.clientWidth / W;
+    c.width = W; c.height = H;
     const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0);
-    const [r, g, b] = ctx.getImageData(8, 8, 1, 1).data;
-    document.getElementById("status").style.background = `rgb(${r},${g},${b})`;
-  });
+    const at = (x, y) => { const [r, g, b] = ctx.getImageData(x, y, 1, 1).data; return `rgb(${r},${g},${b})`; };
+    document.getElementById("status").style.background = at(8, 8);
+    document.querySelectorAll(".patch").forEach((el) => {
+      const p = patches[+el.dataset.i];
+      Object.assign(el.style, {
+        left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%`, width: `${(p.w / W) * 100}%`, height: `${(p.h / H) * 100}%`,
+        background: at(p.x + 1, p.y + 1), color: p.color, fontSize: `${p.size * k}px`, fontWeight: p.weight ?? 400,
+        paddingLeft: `${(p.pad ?? 5) * k}px`,
+      });
+    });
+  }, s.patches ?? []);
   await page.screenshot({ path: resolve(out, `${s.file}_1290x2796.png`) });
   console.log("wrote", s.file);
 }
