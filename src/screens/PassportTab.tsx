@@ -87,7 +87,7 @@ export function PassportTab({ uid, group, onOpen }: {
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
-      <div className="flex flex-col gap-4 px-5 pt-safe">
+      <div className="mx-auto w-full max-w-2xl flex flex-col gap-4 px-5 pt-safe">
         <div className="flex flex-col gap-1 pt-2">
           <Eyebrow>Your culinary journey</Eyebrow>
           <PageTitle>Passport</PageTitle>
@@ -223,8 +223,14 @@ function Stamp({ r, index, onOpen, fluid = false }: { r: Restaurant; index: numb
  */
 function MapPreview({ places }: { places: Restaurant[] }) {
   const [failed, setFailed] = useState(false);
+  // The image is requested at the box's real size, so pins keep their size on iPad.
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const measure = (el: HTMLDivElement | null) => {
+    if (el && !box && el.clientWidth) setBox({ w: el.clientWidth, h: el.clientHeight });
+  };
   const view = useMemo(() => frame(places), [places]);
   if (!view) return <DotGrid />;
+  if (MAPBOX_TOKEN && !failed && !box) return <div ref={measure} className="absolute inset-0" />;
 
   if (MAPBOX_TOKEN && !failed) {
     const inBox = (p: Restaurant) =>
@@ -233,7 +239,7 @@ function MapPreview({ places }: { places: Restaurant[] }) {
     // Cravelist first so tried pins are drawn on top. Cap keeps the URL short.
     const pts = view.pts.filter(inBox).sort((a, b) => Number(a.visited) - Number(b.visited)).slice(-90);
     const bbox = [view.minLng, view.minLat, view.maxLng, view.maxLat].map((n) => n.toFixed(4)).join(",");
-    const src = `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/${pts.map(pin).join(",")}/[${bbox}]/400x228@2x`
+    const src = `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/${pts.map(pin).join(",")}/[${bbox}]/${Math.min(1280, Math.round(box!.w))}x${Math.min(1280, Math.round(box!.h))}@2x`
       + `?padding=28,24,48,24&logo=false&attribution=false&access_token=${MAPBOX_TOKEN}`;
     return (
       <img src={src} alt={`Map of ${places.length} places`} onError={() => setFailed(true)}

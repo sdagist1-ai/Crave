@@ -64,7 +64,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
       <Glow side="right" />
 
-      <div className="relative flex flex-col gap-[18px] px-5 pt-safe">
+      <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-[18px] px-5 pt-safe">
         {/* Top row: list switcher + add */}
         <div className="flex items-center justify-between pt-2">
           <button
@@ -133,7 +133,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
       </div>
 
       {/* The list */}
-      <div className={`relative flex flex-col gap-3 px-5 pt-[18px] transition-opacity ${feed.isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className={`relative mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 px-5 pt-[18px] transition-opacity md:grid-cols-2 ${feed.isPlaceholderData ? "opacity-60" : ""}`}>
         {feed.isPending ? (
           [0, 1, 2, 3].map((i) => <RestaurantCardSkeleton key={i} />)
         ) : feed.isError && restaurants.length === 0 ? (
@@ -166,7 +166,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
             {restaurants.map((r) => (
               <RestaurantCard key={r.id} restaurant={r} memberCount={memberCount} onOpen={onOpen} />
             ))}
-            <div ref={sentinel} className="flex h-10 items-center justify-center" aria-hidden="true">
+            <div ref={sentinel} className="flex h-10 items-center justify-center md:col-span-2" aria-hidden="true">
               {feed.isFetchingNextPage && <Loader2 size={18} className="animate-spin text-muted" />}
             </div>
           </>
@@ -239,7 +239,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
 
 function EmptyState({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center px-6 py-12 text-center animate-rise">
+    <div className="flex flex-col items-center px-6 py-12 text-center animate-rise md:col-span-2">
       <h2 className="m-0 mb-1.5 font-display text-2xl font-bold tracking-[-0.02em]">{title}</h2>
       <p className="m-0 mb-5 max-w-[260px] text-sm text-muted">{body}</p>
       {action}

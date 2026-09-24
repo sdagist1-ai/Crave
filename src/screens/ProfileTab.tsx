@@ -79,7 +79,7 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup }: {
       <Glow side="left" opacity={0.12} />
       <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={onPhoto} />
 
-      <div className="relative flex flex-col gap-4 px-5 pt-safe">
+      <div className="relative mx-auto w-full max-w-2xl flex flex-col gap-4 px-5 pt-safe">
         <div className="flex items-center justify-between pt-2">
           <PageTitle>Profile</PageTitle>
           <button type="button" onClick={() => setSheet("settings")} aria-label="Settings"
