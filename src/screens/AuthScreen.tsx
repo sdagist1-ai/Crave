@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "../lib/supabase";
+
+// Auth emails link back into the app: the custom URL scheme on iOS, or the
+// current site (e.g. the Vercel deployment) when running in a browser.
+// Web origins must be listed under Supabase → Authentication → URL Configuration.
+const isNative = Capacitor.isNativePlatform();
+const webOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
 
 export function AuthScreen() {
   const [email, setEmail] = useState(() => localStorage.getItem("crave_last_email") || "");
@@ -25,7 +32,8 @@ export function AuthScreen() {
           email, 
           password, 
           options: {
-            data: { first_name: firstName, last_name: lastName }
+            data: { first_name: firstName, last_name: lastName },
+            ...(isNative ? {} : { emailRedirectTo: webOrigin }),
           }
         });
         if (err) throw err;
@@ -53,7 +61,7 @@ export function AuthScreen() {
     setMessage(null);
     try {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: "craveapp://reset-password",
+        redirectTo: isNative ? "craveapp://reset-password" : webOrigin,
       });
       if (err) throw err;
       setMessage("Check your email for the password reset link!");

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, focusManager, useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { Search, User, ChevronDown } from "lucide-react";
@@ -19,6 +19,7 @@ import { RestaurantCardSkeleton } from "./components/RestaurantCard";
 
 // Code-split heavy modals and overlays
 const SearchOverlay = lazy(() => import("./components/SearchOverlay").then(m => ({ default: m.SearchOverlay })));
+import type { SavedPlace } from "./components/SearchOverlay";
 const RateSheet = lazy(() => import("./components/RateSheet").then(m => ({ default: m.RateSheet })));
 const RestaurantDetailSheet = lazy(() => import("./components/RestaurantDetailSheet").then(m => ({ default: m.RestaurantDetailSheet })));
 
@@ -43,6 +44,21 @@ async function fetchGroups(): Promise<Group[]> {
   return data || [];
 }
 
+async function fetchSavedPlaces(): Promise<SavedPlace[]> {
+  const { data, error } = await supabase
+    .from("restaurants")
+    .select("place_id, group_id, photo_url, vibes, notes, opening_hours");
+  if (error) throw error;
+  return data.map((r) => ({
+    placeId: r.place_id,
+    groupId: r.group_id,
+    photoUrl: r.photo_url,
+    vibes: Array.isArray(r.vibes) ? (r.vibes as string[]) : [],
+    notes: r.notes,
+    openingHours: Array.isArray(r.opening_hours) ? (r.opening_hours as string[]) : null,
+  }));
+}
+
 export type FetchRestaurantsOptions = {
   uid: string;
   groupId?: string;
@@ -62,7 +78,7 @@ export async function fetchRestaurants({
 
   let query = supabase
     .from("restaurants")
-    .select("*");
+    .select("*, added_by:profiles(id, first_name, last_name, avatar_url)");
 
   if (groupId) {
     query = query.eq("group_id", groupId);
@@ -124,38 +140,20 @@ export async function fetchRestaurants({
 
   const nextCursor = data.length === PAGE_SIZE ? (pageIndex + 1).toString() : null;
 
-  // Fetch reviews using the retrieved placeIds
-  const placeIds = data.map((r: any) => r.place_id).filter(Boolean);
-  const globalReviewsRes = placeIds.length > 0 
-    ? await supabase.from("reviews").select("*").in("place_id", placeIds) 
-    : { data: [], error: null };
+  // Reviews for these places, with each author's name embedded (RLS limits them
+  // to the user's co-members).
+  const placeIds = data.map((r) => r.place_id);
+  const globalReviewsRes = await supabase
+    .from("reviews")
+    .select("*, author:profiles(first_name)")
+    .in("place_id", placeIds);
 
   const activeGroupMembers = membersRes.data ? membersRes.data.map(m => m.user_id) : [];
   if (globalReviewsRes.error) throw globalReviewsRes.error;
-  const allGlobalReviews = globalReviewsRes.data || [];
-
-  // Batch pre-fetch all profiles for reviewers and owners instantly
-  const uniqueUids = new Set(allGlobalReviews.map((r: any) => r.user_id));
-  data.forEach((r: any) => { if (r.owner) uniqueUids.add(r.owner); });
-  
-  const uniqueUidsArray = Array.from(uniqueUids);
-  const profilesPromise = uniqueUidsArray.length > 0 
-    ? supabase.from("profiles").select("id, first_name, last_name, avatar_url").in("id", uniqueUidsArray)
-    : Promise.resolve({ data: [] });
-    
-  const { data: profilesData } = await profilesPromise;
-  
-  const profilesNameMap: Record<string, string> = {};
-  const profilesMap: Record<string, any> = {};
-  
-  profilesData?.forEach((p) => {
-    profilesNameMap[p.id] = p.first_name || "Lover";
-    profilesMap[p.id] = p;
-  });
-
-  allGlobalReviews.forEach((r: any) => {
-    r.authorName = profilesNameMap[r.user_id] || "Guest";
-  });
+  const allGlobalReviews = (globalReviewsRes.data || []).map(({ author, ...rev }) => ({
+    ...rev,
+    authorName: author ? author.first_name || "Lover" : "Guest",
+  }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const restaurants = data.map((r: any) => {
@@ -232,7 +230,7 @@ export async function fetchRestaurants({
 
       reviews: reviews,
       allVisitPhotos: allVisitPhotos,
-      addedBy: r.owner && profilesMap[r.owner] ? profilesMap[r.owner] : null,
+      addedBy: r.added_by ?? null,
 
       createdAt: r.created_at,
     };
@@ -390,16 +388,12 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
     });
   };
 
-  // 3. Background Global Sync for Search Dedupe & Stats - only active when Search is invoked
-  const globalRestaurantsQuery = useInfiniteQuery({
-    queryKey: ["restaurants", "global", sessionUid],
-    queryFn: ({ pageParam }) => fetchRestaurants({
-      uid: sessionUid,
-      pageParam: pageParam as string | null
-    }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: !!sessionUid && isMainUIReady && showSearch,
+  // 3. Every place saved across the user's lists (RLS limits rows to their groups).
+  // Lightweight columns only; powers "already saved" badges and cloning in search.
+  const savedPlacesQuery = useQuery({
+    queryKey: ["restaurants", "saved-places", sessionUid],
+    queryFn: fetchSavedPlaces,
+    enabled: !!sessionUid && showSearch,
   });
 
   // 4. Workspace ALL query (for Passport & Calendar) - only active when user visits Passport or Calendar!
@@ -421,26 +415,14 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
   useEffect(() => {
     if (!isMainUIReady || !derivedGroupId) return;
 
+    // Warm only the light code chunks. PassportTab (1.8 MB of Mapbox) and its
+    // 1000-row query load when the tab is first opened, not right after launch.
     const warmBackgroundTabs = () => {
-      // 1. Silently download code chunks into HTTP cache in the background
-      import("./screens/PassportTab");
       import("./screens/ProfileTab");
       import("./screens/SpinTab");
       import("./screens/CalendarTab");
       import("./components/SearchOverlay");
       import("./components/RestaurantDetailSheet");
-
-      // 2. Silently pre-warm the React Query cache for workspace restaurants (Passport / Calendar)
-      queryClient.prefetchInfiniteQuery({
-        queryKey: ["restaurants", "workspace-all", sessionUid, derivedGroupId],
-        queryFn: ({ pageParam }) => fetchRestaurants({
-          uid: sessionUid,
-          groupId: derivedGroupId,
-          pageParam: pageParam as string | null,
-          all: true,
-        }),
-        initialPageParam: null as string | null,
-      });
     };
 
     // Use requestIdleCallback if available, fallback to 1200ms timeout for Safari
@@ -452,29 +434,33 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
       const timer = setTimeout(warmBackgroundTabs, 1200);
       return () => clearTimeout(timer);
     }
-  }, [isMainUIReady, derivedGroupId, sessionUid, queryClient]);
+  }, [isMainUIReady, derivedGroupId]);
 
+  type RestaurantPages = { pages: { restaurants: Restaurant[] }[] };
   const removeMutation = useMutation({
     mutationFn: async (id: number) => {
       const { error } = await supabase.from("restaurants").delete().eq("id", id);
       if (error) throw error;
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["restaurants", derivedGroupId] });
-      const previous = queryClient.getQueryData(["restaurants", derivedGroupId]);
-      queryClient.setQueryData(["restaurants", derivedGroupId], (old: { restaurants: Restaurant[] } | undefined) => ({
-        ...old, restaurants: old?.restaurants?.filter((r: Restaurant) => r.id !== id) || [],
-      }));
+      await queryClient.cancelQueries({ queryKey: ["restaurants"] });
+      const previous = queryClient.getQueriesData<RestaurantPages>({ queryKey: ["restaurants"] });
+      queryClient.setQueriesData<RestaurantPages>({ queryKey: ["restaurants"] }, (old) =>
+        old?.pages
+          ? { ...old, pages: old.pages.map((p) => ({ ...p, restaurants: p.restaurants.filter((r) => r.id !== id) })) }
+          : old
+      );
       return { previous };
     },
-    onError: (_err, _id, context) => { queryClient.setQueryData(["restaurants", derivedGroupId], context?.previous); },
-    onSettled: () => { queryClient.invalidateQueries({ queryKey: ["restaurants", derivedGroupId] }); },
+    onError: (_err, _id, context) => {
+      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    onSettled: () => { queryClient.invalidateQueries({ queryKey: ["restaurants"] }); },
   });
 
   const activeGroup = groupsQuery.data?.find(g => g.id === derivedGroupId);
 
   const allRestaurants: Restaurant[] = useMemo(() => restaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [restaurantsQuery.data]);
-  const allGlobalRestaurants: Restaurant[] = useMemo(() => globalRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [globalRestaurantsQuery.data]);
   const workspaceAllRestaurants: Restaurant[] = useMemo(() => workspaceAllRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [workspaceAllRestaurantsQuery.data]);
 
   // Automatically bind the actively viewed card to the React Query cache
@@ -482,14 +468,6 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
   const syncedDetailRestaurant = detailRestaurant
     ? allRestaurants.find(r => r.id === detailRestaurant.id) || detailRestaurant
     : null;
-
-  if (showSearch) {
-    return (
-      <Suspense fallback={<div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"><AppShellSkeleton /></div>}>
-        <SearchOverlay activeGroupId={derivedGroupId!} globalRestaurants={allGlobalRestaurants} groups={groupsQuery.data || []} onSave={() => setShowSearch(false)} onClose={() => setShowSearch(false)} />
-      </Suspense>
-    );
-  }
 
   // Wait for background validation before blindly rendering empty states from old caches
   // We only hold for group data to prevent crashing. Restaurant loading is handled gracefully by the tabs.
@@ -601,6 +579,13 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
         </Suspense>
       )}
 
+      {/* Search opens on top of the tabs so they stay mounted (no remount / map reload on close) */}
+      {showSearch && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-background" />}>
+          <SearchOverlay activeGroupId={derivedGroupId} savedPlaces={savedPlacesQuery.data ?? []} groups={groupsQuery.data || []} onSave={() => setShowSearch(false)} onClose={() => setShowSearch(false)} />
+        </Suspense>
+      )}
+
       {/* Rate sheet */}
       {ratingRestaurant && (
         <Suspense fallback={null}>
@@ -659,6 +644,14 @@ export default function App() {
     const handleHashChange = () => processHash(window.location.hash);
     window.addEventListener("hashchange", handleHashChange);
 
+    // iOS suspends the WebView in the background, so timers (including the token
+    // refresh) stop. Refresh the session and refetch stale data on resume.
+    const appStateListener = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) supabase.auth.startAutoRefresh();
+      else supabase.auth.stopAutoRefresh();
+      focusManager.setFocused(isActive);
+    });
+
     // Handle native deep linking from emails
     const deepLinkListener = CapacitorApp.addListener('appUrlOpen', data => {
       if (data.url.includes("type=recovery")) {
@@ -697,6 +690,7 @@ export default function App() {
       subscription.unsubscribe();
       window.removeEventListener("hashchange", handleHashChange);
       deepLinkListener.then(listener => listener.remove());
+      appStateListener.then(listener => listener.remove());
     };
   }, []);
 

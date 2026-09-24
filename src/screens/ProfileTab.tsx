@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../lib/supabase";
+import { getCurrentUserId, supabase } from "../lib/supabase";
 import { Group, Profile } from "../types";
 
 const getColor = (str: string) => {
@@ -121,11 +121,11 @@ export function ProfileTab() {
 
   const loadData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getCurrentUserId();
+      if (!userId) return;
 
       const [profileRes, groupsRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
+        supabase.from("profiles").select("*").eq("id", userId).single(),
         supabase.from("groups").select("*, group_members(profiles(*))").order("created_at", { ascending: true })
       ]);
 
@@ -184,7 +184,7 @@ export function ProfileTab() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background">
-        <Icon icon="solar:spinner-broken-linear" className="animate-spin text-primary size-8" />
+        <Icon icon="ph:spinner-gap-bold" className="animate-spin text-primary size-8" />
       </div>
     );
   }
@@ -198,7 +198,7 @@ export function ProfileTab() {
           <label className="relative mb-4 cursor-pointer group">
             <div className="w-24 h-24 rounded-full border-4 border-background shadow-md overflow-hidden bg-secondary flex items-center justify-center">
               {uploadingAvatar ? (
-                <Icon icon="solar:spinner-broken-linear" className="animate-spin text-primary size-8" />
+                <Icon icon="ph:spinner-gap-bold" className="animate-spin text-primary size-8" />
               ) : profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
               ) : (
@@ -266,7 +266,7 @@ export function ProfileTab() {
                 <div className="flex items-center gap-4 min-w-0">
                   <label className="relative group w-16 h-16 rounded-2xl flex items-center justify-center cursor-pointer overflow-hidden shadow-sm flex-shrink-0 bg-secondary" style={!g.avatar_url ? { background: getColor(g.name) } : {}}>
                     {uploadingGroupAvatarId === g.id ? (
-                      <Icon icon="solar:spinner-broken-linear" className="animate-spin text-white size-6" />
+                      <Icon icon="ph:spinner-gap-bold" className="animate-spin text-white size-6" />
                     ) : g.avatar_url ? (
                       <img src={g.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (

@@ -23,5 +23,5 @@ The App must migrate to a **Cursor Pagination** model fueled by React Query's `u
 When the app forces scaling, convert the primary feeds and `CalendarTab.tsx` (Passport) mathematical scans to utilize `useInfiniteQuery` anchored off of `created_at` timestamps, enabling social-media style Infinite Scrolling. 
 
 ## 3. Infrastructure API Hardening
-* **Google Cloud Restrictions**: Ensure the `VITE_GOOGLE_API_KEY` is fully locked to the iOS app `Bundle ID` inside the Google Developer Console to block external script exploitation.
+* **Google Places key**: The key lives only in Supabase as the `GOOGLE_PLACES_API_KEY` Edge Function secret (see `supabase/functions/places`); the app never holds it. Restrict it by API (Places API (New) only) in Google Cloud Console, not by iOS bundle ID or HTTP referrer — those restrictions reject server-side calls.
 * **Subscription Monetization**: Install rigid Apple App Store receipt validations (e.g. RevenueCat) around globally expensive calculations, primarily gating complex `CalendarTab.tsx` statistics from free-tier users.

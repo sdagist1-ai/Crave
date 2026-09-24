@@ -1,5 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/outfit";
+import "./lib/icons";
 import App from "./App";
 import "./main.css";
 

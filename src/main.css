@@ -162,10 +162,10 @@ html, body, #root {
   --chart-4: #32ade6;
   --chart-5: #af52de;
 
-  --font-sans: "Inter";
-  --font-heading: "Outfit";
-  --font-serif: "Playfair Display";
-  --font-mono: "JetBrains Mono";
+  --font-sans: "Inter Variable", -apple-system, system-ui, sans-serif;
+  --font-heading: "Outfit Variable", -apple-system, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", monospace;
 
   --radius: 1rem;
 }

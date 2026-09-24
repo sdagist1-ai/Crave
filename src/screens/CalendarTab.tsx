@@ -131,7 +131,7 @@ export function CalendarTab({
           </div>
         </div>
         <div ref={observerTarget} className="h-4 w-full flex items-center justify-center mt-2 pb-6">
-          {isFetchingNextPage && <Icon icon="solar:spinner-broken-linear" className="animate-spin text-muted-foreground size-5" />}
+          {isFetchingNextPage && <Icon icon="ph:spinner-gap-bold" className="animate-spin text-muted-foreground size-5" />}
         </div>
       </main>
     </div>

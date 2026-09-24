@@ -1,12 +1,30 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "@iconify/react";
 import { supabase } from "../lib/supabase";
-import { searchPlaces, type PlaceResult } from "../lib/places";
+import { cachePlacePhoto, searchPlaces, type PlaceResult } from "../lib/places";
 import { useDebounce } from "../hooks/useDebounce";
+import { useApproxLocation } from "../hooks/useApproxLocation";
 import { VIBE_OPTIONS } from "../constants/theme";
 import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
-import { Restaurant, Group } from "../types";
+import { Group } from "../types";
+
+/** A place already saved in one of the user's lists (for "already saved" badges and cloning). */
+export type SavedPlace = {
+  placeId: string;
+  groupId: string;
+  photoUrl: string | null;
+  vibes: string[];
+  notes: string | null;
+  openingHours: string[] | null;
+};
+
+function saveErrorMessage(err: unknown) {
+  if (err && typeof err === "object" && "code" in err && err.code === "23505") {
+    return "That spot is already in this Cravelist.";
+  }
+  return "Couldn't save that spot. Check your connection and try again.";
+}
 
 // Hash function to generate a consistent, beautiful gradient based on the restaurant name
 function generateGradientFromName(name: string) {
@@ -19,52 +37,38 @@ function generateGradientFromName(name: string) {
   return `linear-gradient(135deg, hsl(${h1}, 80%, 75%), hsl(${h2}, 80%, 65%))`;
 }
 
-export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave, onClose }: { activeGroupId: string | null; globalRestaurants: Restaurant[]; groups: Group[]; onSave: () => void; onClose: () => void }) {
+export function SearchOverlay({ activeGroupId, savedPlaces, groups, onSave, onClose }: { activeGroupId: string | null; savedPlaces: SavedPlace[]; groups: Group[]; onSave: () => void; onClose: () => void }) {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebounce(query, 350);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const coords = useApproxLocation();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
+  const trimmedQuery = debouncedQuery.trim();
+  const canSearch = trimmedQuery.length >= 2;
   const searchQuery = useQuery({
-    queryKey: ["searchRestaurants", debouncedQuery],
-    queryFn: () => searchPlaces(debouncedQuery),
-    enabled: debouncedQuery.length >= 2,
-    staleTime: 30000,
+    queryKey: ["searchRestaurants", trimmedQuery, coords?.lat.toFixed(2), coords?.lng.toFixed(2)],
+    queryFn: ({ signal }) => searchPlaces(trimmedQuery, { coords, signal }),
+    enabled: canSearch,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    // Keep the previous results on screen while the next query loads
+    placeholderData: keepPreviousData,
   });
+  const isTyping = query.trim() !== trimmedQuery;
 
   const handleSave = async (place: PlaceResult) => {
     setSaving(true);
+    setSaveError(null);
     try {
-      // Download from Google EXACTLY ONCE and cache heavily into Supabase Storage
-      let finalPhotoUrl = null;
-      if (place.photoUrl) {
-        try {
-          const googleUrl = `https://places.googleapis.com/v1/${place.photoUrl}/media?maxWidthPx=600&key=${import.meta.env.VITE_GOOGLE_API_KEY}`;
-          const res = await fetch(googleUrl);
-          if (res.ok) {
-            const blob = await res.blob();
-            const filename = `place_${place.id}_${Date.now()}.jpg`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
-              .from("place_photos")
-              .upload(filename, blob, { upsert: true, contentType: "image/jpeg" });
-
-            if (!uploadError && uploadData) {
-              const { data } = supabase.storage.from("place_photos").getPublicUrl(filename);
-              finalPhotoUrl = data.publicUrl;
-            } else {
-              console.error("Photo upload error:", uploadError);
-            }
-          }
-        } catch (e) {
-          console.warn("Storage caching failed, proceeding without photo:", e);
-        }
-      }
+      const finalPhotoUrl = place.photoUrl ? await cachePlacePhoto(place.photoUrl, place.id) : null;
 
       // owner, created_at and visited are set by the database
       const { error } = await supabase.from("restaurants").insert({
@@ -93,13 +97,15 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
       onSave();
     } catch (err) {
       console.error("Failed to save restaurant:", err);
+      setSaveError(saveErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSilentClone = async (place: PlaceResult, instanceToClone: Restaurant) => {
+  const handleSilentClone = async (place: PlaceResult, instanceToClone: SavedPlace) => {
     setSaving(true);
+    setSaveError(null);
     try {
       const { error } = await supabase.from("restaurants").insert({
         group_id: activeGroupId!,
@@ -125,6 +131,7 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
       onSave();
     } catch (err) {
       console.error("Failed to clone restaurant:", err);
+      setSaveError(saveErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -151,21 +158,46 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
                 placeholder="Search for a restaurant..."
                 className="w-full bg-secondary border border-transparent rounded-full pl-11 pr-10 py-3 text-[15px] font-medium text-foreground placeholder:text-muted-foreground outline-none transition-colors" />
               {query && (
-                <button type="button" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  <Icon icon="solar:close-circle-bold" className="size-4" />
+                <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {canSearch && (isTyping || searchQuery.isFetching)
+                    ? <Icon icon="ph:spinner-gap-bold" className="animate-spin size-4" />
+                    : <Icon icon="solar:close-circle-bold" className="size-4" />}
                 </button>
               )}
             </div>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {searchQuery.isLoading && debouncedQuery.length >= 2 && (
-            <div className="flex items-center justify-center p-12">
-              <Icon icon="solar:spinner-broken-linear" className="animate-spin text-primary size-8" />
+          {saveError && (
+            <div role="alert" className="mx-4 mt-3 rounded-2xl bg-destructive/10 text-destructive px-4 py-3 text-sm font-medium">
+              {saveError}
             </div>
           )}
+          {query.trim().length < 2 ? (
+            <div className="flex flex-col items-center justify-center p-16 text-muted-foreground/50">
+              <Icon icon="solar:magnifer-linear" className="size-10 mb-4" />
+              <p className="text-sm font-medium">Search by name, cuisine, or location</p>
+            </div>
+          ) : searchQuery.isError && !searchQuery.data ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center">
+              <Icon icon="solar:cloud-cross-linear" className="size-10 mb-3 text-muted-foreground" />
+              <p className="text-sm font-bold text-foreground mb-1">Search isn't working right now</p>
+              <p className="text-sm text-muted-foreground mb-5">Check your connection and try again.</p>
+              <button type="button" onClick={() => searchQuery.refetch()}
+                className="px-5 py-2.5 rounded-full text-sm font-bold bg-primary text-primary-foreground active:scale-95 transition-transform">
+                Try again
+              </button>
+            </div>
+          ) : !searchQuery.data ? (
+            <div className="flex items-center justify-center p-12">
+              <Icon icon="ph:spinner-gap-bold" className="animate-spin text-primary size-8" />
+            </div>
+          ) : searchQuery.data.length === 0 && !isTyping && !searchQuery.isFetching ? (
+            <div className="text-center text-muted-foreground p-12 text-sm font-medium">No spots found for "{trimmedQuery}"</div>
+          ) : (
+          <div className={`transition-opacity ${isTyping || searchQuery.isPlaceholderData ? "opacity-60" : "opacity-100"}`}>
           {searchQuery.data?.map((place: PlaceResult) => {
-            const savedInstances = globalRestaurants.filter(r => r.placeId === place.id);
+            const savedInstances = savedPlaces.filter(r => r.placeId === place.id);
             const savedGroupNames = savedInstances.map(r => groups.find(g => g.id === r.groupId)?.name).filter(Boolean);
             const isAlreadyHere = savedInstances.some(r => r.groupId === activeGroupId);
 
@@ -211,14 +243,7 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
               </button>
             );
           })}
-          {debouncedQuery.length >= 2 && !searchQuery.isLoading && searchQuery.data?.length === 0 && (
-            <div className="text-center text-muted-foreground p-12 text-sm font-medium">No restaurants found</div>
-          )}
-          {debouncedQuery.length < 2 && (
-            <div className="flex flex-col items-center justify-center p-16 text-muted-foreground/50">
-              <Icon icon="solar:magnifer-linear" className="size-10 mb-4" />
-              <p className="text-sm font-medium">Search by name, cuisine, or location</p>
-            </div>
+          </div>
           )}
         </div>
       </div>
@@ -286,9 +311,10 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
           disabled={saving || selectedVibes.length === 0}
           className="w-full py-4 rounded-full font-bold text-primary-foreground text-sm disabled:opacity-40 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95"
           style={{ background: "var(--color-primary)" }}>
-          {saving ? <Icon icon="solar:spinner-broken-linear" className="animate-spin size-5" /> : <Icon icon="solar:add-circle-bold" className="size-5" />}
+          {saving ? <Icon icon="ph:spinner-gap-bold" className="animate-spin size-5" /> : <Icon icon="solar:add-circle-bold" className="size-5" />}
           {saving ? "Saving..." : "Save to My List"}
         </button>
+        {saveError && <p role="alert" className="text-xs text-destructive font-semibold text-center mt-2">{saveError}</p>}
         {selectedVibes.length === 0 && <p className="text-[11px] text-muted-foreground font-medium text-center mt-2">Pick at least one vibe</p>}
       </div>
     </div>

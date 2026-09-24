@@ -307,7 +307,7 @@ export function ListTab({
                 <RestaurantCard key={r.id} restaurant={r} onDetail={onDetail} />
               ))}
               <div ref={observerTarget} className="h-4 w-full flex items-center justify-center pt-2">
-                {isFetchingNextPage && <Icon icon="solar:spinner-broken-linear" className="animate-spin text-muted-foreground size-5" />}
+                {isFetchingNextPage && <Icon icon="ph:spinner-gap-bold" className="animate-spin text-muted-foreground size-5" />}
               </div>
             </>
           )}

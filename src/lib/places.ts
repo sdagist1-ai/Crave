@@ -1,18 +1,9 @@
-const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || "";
+import { FunctionsHttpError } from "@supabase/supabase-js";
+import { supabase } from "./supabase";
 
-interface GooglePlace {
-  id: string;
-  displayName?: { text: string };
-  formattedAddress?: string;
-  location?: { latitude: number; longitude: number };
-  rating?: number;
-  userRatingCount?: number;
-  priceLevel?: string;
-  primaryType?: string;
-  photos?: { name: string }[];
-  currentOpeningHours?: { openNow: boolean };
-  regularOpeningHours?: { weekdayDescriptions: string[] };
-}
+// All Google Places calls go through the `places` Edge Function
+// (supabase/functions/places), which holds the API key server-side as the
+// GOOGLE_PLACES_API_KEY secret. No Google key ships in the app.
 
 export type PlaceResult = {
   id: string;
@@ -24,87 +15,73 @@ export type PlaceResult = {
   userRatingCount?: number;
   priceLevel?: string;
   primaryType?: string;
+  /** Google photo resource name (places/…/photos/…), not a URL */
   photoUrl?: string;
   openNow?: boolean;
   openingHours?: string[];
 };
 
+export type Coords = { lat: number; lng: number };
 
-export async function searchPlaces(query: string): Promise<PlaceResult[]> {
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": GOOGLE_API_KEY,
-      "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.primaryType,places.photos,places.currentOpeningHours,places.regularOpeningHours",
-    },
-    body: JSON.stringify({ textQuery: `${query} restaurant` }),
-  });
+export class PlacesError extends Error {}
 
-  if (!res.ok) return [];
-  const data = await res.json();
 
-  return (data.places || []).map((p: GooglePlace) => ({
-    id: p.id,
-    name: p.displayName?.text || "",
-    address: p.formattedAddress || "",
-    lat: p.location?.latitude || 0,
-    lng: p.location?.longitude || 0,
-    rating: p.rating,
-    userRatingCount: p.userRatingCount,
-    priceLevel: p.priceLevel,
-    primaryType: p.primaryType,
-    photoUrl: p.photos?.[0]?.name,
-    openNow: p.currentOpeningHours?.openNow,
-    openingHours: p.regularOpeningHours?.weekdayDescriptions,
-  }));
+async function callPlaces<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const { data, error } = await supabase.functions.invoke<T>("places", { body, signal });
+  if (!error) return data as T;
+
+  if (error instanceof FunctionsHttpError) {
+    const detail = await error.context.json().catch(() => null);
+    throw new PlacesError(detail?.error ?? `places_${error.context.status}`);
+  }
+  throw new PlacesError(error.message);
+}
+
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+export async function searchPlaces(
+  query: string,
+  { coords = null, signal }: { coords?: Coords | null; signal?: AbortSignal } = {},
+): Promise<PlaceResult[]> {
+  const { places } = await callPlaces<{ places: PlaceResult[] }>(
+    { action: "search", query, lat: coords?.lat, lng: coords?.lng },
+    signal,
+  );
+  return places;
+}
+
+/** Copies a place's Google photo into Storage and returns its public URL (null if unavailable). */
+export async function cachePlacePhoto(photoName: string, placeId: string): Promise<string | null> {
+  try {
+    const { url } = await callPlaces<{ url: string }>({ action: "photo", photoName, placeId });
+    return url;
+  } catch (err) {
+    console.warn("Photo caching failed, saving without photo:", err);
+    return null;
+  }
+}
+
+async function placeDetails(placeId: string) {
+  return callPlaces<{ openingHours: string[] | null; photoName: string | null }>({ action: "details", placeId });
 }
 
 // ──────────────────────────────────────────────────────────────────
 // TTL Live Cloud Sync Helper
 // ──────────────────────────────────────────────────────────────────
-export async function syncRestaurantData(placeId: string, supabaseId: number, supabase: any) {
+export async function syncRestaurantData(placeId: string, supabaseId: number) {
   try {
-    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}?fields=regularOpeningHours,photos`, {
-      method: "GET",
-      headers: {
-        "X-Goog-Api-Key": GOOGLE_API_KEY,
-      },
-    });
+    const details = await placeDetails(placeId);
+    const photoUrl = details.photoName ? await cachePlacePhoto(details.photoName, placeId) : null;
 
-    if (!res.ok) return false;
-    const place: GooglePlace = await res.json();
-
-    // Re-proxy the photo strictly if we need a new cache!
-    let newPhotoUrl = undefined;
-    if (place.photos?.[0]?.name) {
-      const googleUrl = `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxWidthPx=600&key=${GOOGLE_API_KEY}`;
-      const imgRes = await fetch(googleUrl);
-      if (imgRes.ok) {
-        const blob = await imgRes.blob();
-        const filename = `place_${placeId}_${Date.now()}.jpg`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("place_photos")
-          .upload(filename, blob, { upsert: true, contentType: "image/jpeg" });
-        if (!uploadError && uploadData) {
-          const { data } = supabase.storage.from("place_photos").getPublicUrl(filename);
-          newPhotoUrl = data.publicUrl;
-        }
-      }
-    }
-
-    const payload: any = {
-      last_synced_at: new Date().toISOString(),
-    };
-    if (place.regularOpeningHours?.weekdayDescriptions) {
-      payload.opening_hours = place.regularOpeningHours.weekdayDescriptions;
-    }
-    if (newPhotoUrl) {
-      payload.photo_url = newPhotoUrl;
-    }
-
-    await supabase.from("restaurants").update(payload).eq("id", supabaseId);
+    const { error } = await supabase
+      .from("restaurants")
+      .update({
+        last_synced_at: new Date().toISOString(),
+        ...(details.openingHours ? { opening_hours: details.openingHours } : {}),
+        ...(photoUrl ? { photo_url: photoUrl } : {}),
+      })
+      .eq("id", supabaseId);
+    if (error) throw error;
     return true;
   } catch (error) {
     console.warn("Failed TTL sync:", error);
