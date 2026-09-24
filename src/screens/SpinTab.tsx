@@ -13,6 +13,15 @@ type Mode = "new" | "nostalgia";
 
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+const VERDICTS = ["Tonight", "Fate has spoken", "Dinner is decided", "No take-backs", "The dice say", "It's written"];
+
+function spinNudge(spins: number) {
+  if (spins >= 8) return "Just pick one 😅";
+  if (spins >= 5) return `Spin #${spins}, picky tonight?`;
+  if (spins >= 3) return `Spin #${spins}`;
+  return null;
+}
+
 /** Unbiased random index in [0, n). */
 function randomIndex(n: number) {
   const buf = new Uint32Array(1);
@@ -31,6 +40,9 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
   const setPick = (r: Restaurant | null) => setPicked(r ? { key: poolKey, r } : null);
   const [flash, setFlash] = useState<Restaurant | null>(null);
   const [spinning, setSpinning] = useState(false);
+  const [verdict, setVerdict] = useState(VERDICTS[0]);
+  // Re-spins in a row, for a little ribbing when nobody can decide.
+  const [spins, setSpins] = useState(0);
   const timers = useRef<number[]>([]);
 
   const pool = useQuery({
@@ -54,27 +66,38 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
       setFlash(null);
       setPick(winner);
       setSpinning(false);
+      setVerdict(VERDICTS[randomIndex(VERDICTS.length)]);
       Haptics.notification({ type: NotificationType.Success }).catch(() => {});
       if (!prefersReducedMotion()) {
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.4 }, colors: ["#ff453a", "#ffe0de", "#10b981", "#0f172a"], disableForReducedMotion: true });
+        // Two bursts from either side of the dial, plus a pop from the centre.
+        const colors = ["#ff453a", "#ffb4ae", "#10b981", "#0f172a", "#fbbf24"];
+        confetti({ particleCount: 60, angle: 60, spread: 55, startVelocity: 45, origin: { x: 0, y: 0.45 }, colors, disableForReducedMotion: true });
+        confetti({ particleCount: 60, angle: 120, spread: 55, startVelocity: 45, origin: { x: 1, y: 0.45 }, colors, disableForReducedMotion: true });
+        confetti({ particleCount: 40, spread: 360, startVelocity: 22, gravity: 0.7, scalar: 0.8, origin: { y: 0.33 }, colors, disableForReducedMotion: true });
       }
     };
 
     if (prefersReducedMotion() || places.length === 1) return finish();
 
-    // Flick through the pool, slowing down, then land on the winner.
+    // Flick through the pool fast, ease out, then land on the winner (~1.1 s).
     setSpinning(true);
     setPick(null);
+    setSpins((n) => n + 1);
     timers.current = [];
     let elapsed = 0;
-    for (let step = 0; step < 16; step++) {
-      elapsed += 45 + step * step * 1.1; // ~2 s, easing out
+    let last = -1;
+    for (let step = 0; step < 18; step++) {
+      elapsed += 28 + step * step * 0.45;
       timers.current.push(window.setTimeout(() => {
-        setFlash(places[randomIndex(places.length)]);
-        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+        // Never show the same name twice in a row, so it visibly ticks.
+        let i = randomIndex(places.length);
+        if (i === last && places.length > 1) i = (i + 1) % places.length;
+        last = i;
+        setFlash(places[i]);
+        Haptics.impact({ style: step < 12 ? ImpactStyle.Light : ImpactStyle.Medium }).catch(() => {});
       }, elapsed));
     }
-    timers.current.push(window.setTimeout(finish, elapsed + 240));
+    timers.current.push(window.setTimeout(finish, elapsed + 160));
   };
 
   const shown = flash ?? pick;
@@ -97,12 +120,12 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
           style={{ background: "radial-gradient(closest-side, rgba(255,69,58,0.22), rgba(255,69,58,0))" }} />
         <div aria-hidden="true"
           className="absolute h-[296px] w-[296px] rounded-full border border-dashed border-border-strong animate-orbit"
-          style={spinning ? { animationDuration: "1.2s" } : undefined}>
+          style={spinning ? { animationDuration: "0.5s" } : undefined}>
           <div className="absolute -top-1.5 left-[142px] h-3 w-3 rounded-full bg-accent shadow-[0_0_16px_#ff453a]" />
         </div>
         <div aria-hidden="true"
           className="absolute h-[230px] w-[230px] rounded-full border border-border animate-orbit-rev"
-          style={spinning ? { animationDuration: "0.9s" } : undefined}>
+          style={spinning ? { animationDuration: "0.35s" } : undefined}>
           <div className="absolute bottom-2.5 left-[30px] h-2 w-2 rounded-full bg-mint" />
         </div>
 
@@ -111,11 +134,11 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
           onClick={() => pick && onOpen(pick)}
           disabled={!pick}
           aria-live="polite"
-          className="relative flex h-[184px] w-[184px] flex-col items-center justify-center gap-1.5 rounded-full border border-border bg-surface p-5 text-center shadow-[0_30px_60px_rgba(15,23,42,0.10)]"
+          className={`relative flex h-[184px] w-[184px] flex-col items-center justify-center gap-1.5 rounded-full border bg-surface p-5 text-center transition-[box-shadow,border-color] duration-300 ${spinning ? "animate-wiggle border-accent shadow-[0_0_0_6px_rgba(255,69,58,0.12),0_30px_60px_rgba(255,69,58,0.25)]" : "border-border shadow-[0_30px_60px_rgba(15,23,42,0.10)]"}`}
         >
           {shown ? (
-            <span key={shown.id} className={`flex flex-col items-center gap-1.5 ${spinning ? "" : "animate-pop"}`}>
-              {!spinning && <span className="font-mono text-[10px] tracking-[0.14em] text-accent-ink">TONIGHT</span>}
+            <span key={shown.id} className={`flex flex-col items-center gap-1.5 ${spinning ? "animate-tick" : "animate-land"}`}>
+              {!spinning && <span className="font-mono text-[10px] tracking-[0.14em] text-accent-ink uppercase">{verdict}</span>}
               <span className="line-clamp-3 font-display text-2xl leading-[1.05] font-extrabold">{shown.name}</span>
               {!spinning && (
                 <span className="text-xs text-muted">
@@ -172,6 +195,9 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
           <button type="button" onClick={() => onOpen(pick)} className="h-11 text-sm font-semibold text-accent-ink">
             See {pick.name}
           </button>
+        )}
+        {!spinning && spinNudge(spins) && (
+          <p className="m-0 text-center font-mono text-xs text-muted animate-fade-in">{spinNudge(spins)}</p>
         )}
       </div>
     </div>

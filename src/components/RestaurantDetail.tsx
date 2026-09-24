@@ -58,11 +58,6 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
   const ratedLabel =
     memberCount === 1 ? (scored.length ? "Rated by you" : "Not rated yet")
     : `${scored.length} of ${memberCount} rated`;
-  const rangeLabel =
-    scores.length > 1 && Math.min(...scores) === Math.max(...scores) ? `Everyone gave it a ${scores[0]}`
-    : scores.length > 1 ? `Scores range ${Math.min(...scores)}–${Math.max(...scores)}`
-    : scores.length === 1 ? (memberCount > 1 ? "Waiting on the rest of the crew" : "Your score")
-    : memberCount > 1 ? "Be the first to rate it" : "Rate it after your visit";
 
   // Members first (in join order), then anyone else who reviewed (e.g. left the list).
   const people = [
@@ -74,8 +69,14 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
         score: rev.score,
       })),
   ];
-  const shownPeople = people.length > 6 ? people.slice(0, 5) : people;
-  const extraPeople = people.length - shownPeople.length;
+  const rated = people.filter((p) => p.score != null);
+  const waitingOn = people.filter((p) => p.score == null && p.person.id !== myUid).map((p) => displayName(p.person));
+
+  const rangeLabel =
+    scores.length > 1 && Math.min(...scores) === Math.max(...scores) ? `Everyone gave it a ${scores[0]}`
+    : scores.length > 1 ? `Scores range ${Math.min(...scores)}–${Math.max(...scores)}`
+    : scores.length === 1 ? (waitingOn.length ? `Waiting on ${waitingOn.join(", ")}` : memberCount > 1 ? "Waiting on the rest of the crew" : "Your score")
+    : memberCount > 1 ? "Be the first to rate it" : "Rate it after your visit";
 
   const handleShare = async () => {
     const text = `${r.name} — ${r.address}`;
@@ -185,25 +186,15 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
               <div className="text-xs text-muted">{rangeLabel}</div>
             </div>
           </div>
-          {people.length > 0 && (
-            <ul className="m-0 flex list-none gap-2 overflow-x-auto p-0">
-              {shownPeople.map(({ person, score }) => (
-                <li key={person.id} className="flex w-[46px] shrink-0 flex-col items-center gap-1">
-                  <span className={`rounded-full p-[2px] ${score != null ? "border-2 border-accent" : "border-2 border-dashed border-border-strong"}`}>
-                    <Avatar person={person} size={32} />
-                  </span>
-                  <span className={`font-mono text-xs font-semibold ${score != null ? "text-ink" : "text-muted"}`}>
-                    {score ?? "—"}
-                  </span>
-                  <span className="sr-only">{displayName(person)}: {score != null ? `${score} out of 10` : "not rated"}</span>
+          {rated.length > 0 && (
+            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="Scores">
+              {rated.map(({ person, score }) => (
+                <li key={person.id} className="inline-flex items-center gap-1.5 rounded-full bg-subtle py-1 pr-2.5 pl-1">
+                  <Avatar person={person} size={22} />
+                  <span className="text-[13px] text-ink-2">{person.id === myUid ? "You" : displayName(person)}</span>
+                  <span className="font-mono text-[13px] font-semibold tabular">{score}</span>
                 </li>
               ))}
-              {extraPeople > 0 && (
-                <li className="flex w-[46px] shrink-0 flex-col items-center gap-1">
-                  <span className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-ink font-mono text-xs font-semibold text-white">+{extraPeople}</span>
-                  <span className="text-[11px] text-muted">more</span>
-                </li>
-              )}
             </ul>
           )}
         </section>
