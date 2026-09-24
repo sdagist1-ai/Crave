@@ -75,7 +75,7 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
     if (newGroupName.length < 3) return setError("Name must be at least 3 characters.");
     setLoading(true);
     setError(null);
-    const { error: err } = await supabase.rpc("create_group", { group_name: newGroupName });
+    const { data: newGroupId, error: err } = await supabase.rpc("create_group", { group_name: newGroupName });
     
     if (err) {
       setError(err.message);
@@ -83,9 +83,8 @@ export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
       return;
     }
 
-    if (groupAvatarUrl && userId) {
-      // Patch the avatar into the newly generated group container!
-      await supabase.from('groups').update({ avatar_url: groupAvatarUrl }).eq('name', newGroupName).eq('created_by', userId);
+    if (groupAvatarUrl && newGroupId) {
+      await supabase.from('groups').update({ avatar_url: groupAvatarUrl }).eq('id', newGroupId);
     }
 
     setLoading(false);

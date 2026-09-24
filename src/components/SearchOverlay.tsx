@@ -41,8 +41,6 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
   const handleSave = async (place: PlaceResult) => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
       // Download from Google EXACTLY ONCE and cache heavily into Supabase Storage
       let finalPhotoUrl = null;
       if (place.photoUrl) {
@@ -68,25 +66,23 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
         }
       }
 
+      // owner, created_at and visited are set by the database
       const { error } = await supabase.from("restaurants").insert({
-        owner: user?.id ?? "",
-        group_id: activeGroupId,
+        group_id: activeGroupId!,
         place_id: place.id,
         name: place.name,
         address: place.address,
-        latitude: String(place.lat),
-        longitude: String(place.lng),
-        rating: place.rating != null ? String(place.rating) : null,
+        latitude: place.lat,
+        longitude: place.lng,
+        rating: place.rating ?? null,
         user_rating_count: place.userRatingCount ?? null,
         price_level: place.priceLevel ?? null,
         primary_type: place.primaryType ?? null,
         photo_url: finalPhotoUrl,
-        vibes: JSON.stringify(selectedVibes),
+        vibes: selectedVibes,
         notes: notes || "",
-        visited: false,
-        created_at: new Date().toISOString(),
         last_synced_at: new Date().toISOString(),
-        opening_hours: place.openingHours ? JSON.stringify(place.openingHours) : null,
+        opening_hours: place.openingHours ?? null,
       });
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });
@@ -105,26 +101,22 @@ export function SearchOverlay({ activeGroupId, globalRestaurants, groups, onSave
   const handleSilentClone = async (place: PlaceResult, instanceToClone: Restaurant) => {
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from("restaurants").insert({
-        owner: user?.id ?? "",
-        group_id: activeGroupId,
+        group_id: activeGroupId!,
         place_id: place.id,
         name: place.name,
         address: place.address,
-        latitude: String(place.lat),
-        longitude: String(place.lng),
-        rating: place.rating != null ? String(place.rating) : null,
+        latitude: place.lat,
+        longitude: place.lng,
+        rating: place.rating ?? null,
         user_rating_count: place.userRatingCount ?? null,
         price_level: place.priceLevel ?? null,
         primary_type: place.primaryType ?? null,
         photo_url: instanceToClone.photoUrl ?? null,
-        vibes: JSON.stringify(instanceToClone.vibes || []),
+        vibes: instanceToClone.vibes || [],
         notes: instanceToClone.notes || "",
-        visited: false,
-        created_at: new Date().toISOString(),
         last_synced_at: new Date().toISOString(),
-        opening_hours: instanceToClone.openingHours ? JSON.stringify(instanceToClone.openingHours) : null,
+        opening_hours: instanceToClone.openingHours ?? null,
       });
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["restaurants"] });

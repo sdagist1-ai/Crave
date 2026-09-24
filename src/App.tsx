@@ -417,30 +417,6 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
     enabled: !!derivedGroupId && !!sessionUid && isMainUIReady && shouldFetchWorkspaceAll,
   });
 
-  // 🩺 Self-healing sync: Ensure any restaurant with reviews in the database has visited = true
-  useEffect(() => {
-    if (!sessionUid) return;
-    const healVisited = async () => {
-      try {
-        const { data: revs } = await supabase.from("reviews").select("place_id");
-        if (!revs || revs.length === 0) return;
-        const placeIds = Array.from(new Set(revs.map((r: any) => r.place_id)));
-        const { data: updated } = await supabase
-          .from("restaurants")
-          .update({ visited: true })
-          .in("place_id", placeIds)
-          .eq("visited", false)
-          .select("id");
-        if (updated && updated.length > 0) {
-          queryClient.invalidateQueries({ queryKey: ["restaurants"] });
-        }
-      } catch (e) {
-        console.error("Heal visited error:", e);
-      }
-    };
-    healVisited();
-  }, [sessionUid, queryClient]);
-
   // ⚡️ IDLE PREFETCHING: Pre-warm code chunks & cache silently during idle time once the list is ready!
   useEffect(() => {
     if (!isMainUIReady || !derivedGroupId) return;
