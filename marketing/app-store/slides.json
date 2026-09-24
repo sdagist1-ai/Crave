@@ -164,6 +164,33 @@
     "sub": "Search any restaurant, café or bar and save it to your list.",
     "chip": "⚡  Saved in one tap",
     "chipAt": "right",
-    "chipY": 640
+    "chipY": 640,
+    "ipad": {
+      "title": "Save it in seconds.",
+      "sub": "Tag the vibe, add a note, and it's on the list for everyone.",
+      "chipY": 700,
+      "patches": [
+        {
+          "x": 243,
+          "y": 77,
+          "w": 28,
+          "h": 26,
+          "text": "❤️",
+          "size": 18,
+          "color": "#000",
+          "pad": 2
+        },
+        {
+          "x": 810,
+          "y": 1884,
+          "w": 28,
+          "h": 28,
+          "text": "❤️",
+          "size": 18,
+          "color": "#000",
+          "pad": 2
+        }
+      ]
+    }
   }
 ]
