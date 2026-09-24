@@ -1,94 +1,72 @@
-import { Icon } from "@iconify/react";
-import { Restaurant } from "../types";
-import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
+import { UtensilsCrossed } from "lucide-react";
+import type { Restaurant } from "../types";
+import { formatPriceLevel, placeSubtitle } from "../utils/helpers";
+import { Avatar, AvatarStack, ScoreCircle, Tag, VibeTag } from "./ui";
+import { displayName } from "../utils/people";
 
-export function RestaurantCard({
-  restaurant, onDetail,
-}: {
-  restaurant: Restaurant; onDetail: (r: Restaurant) => void;
+export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
+  restaurant: Restaurant;
+  memberCount: number;
+  onOpen: (r: Restaurant) => void;
 }) {
+  const raters = r.reviews.filter((rev) => rev.score != null);
+  const price = formatPriceLevel(r.priceLevel);
+
   return (
-    <div 
-      onClick={() => onDetail(restaurant)}
-      className="bg-card rounded-[1.5rem] p-3 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-border/50 flex gap-4 active:scale-[0.98] transition-transform cursor-pointer"
+    <button
+      type="button"
+      onClick={() => onOpen(r)}
+      className="flex w-full items-center gap-3.5 rounded-[22px] border border-border bg-surface p-2.5 text-left transition-transform active:scale-[0.98]"
     >
-      <div className="relative shrink-0">
-        {restaurant.photoUrl ? (
-          <img
-            src={restaurant.photoUrl}
-            alt={restaurant.name}
-            loading="lazy"
-            decoding="async"
-            className="w-[100px] h-[100px] rounded-2xl object-cover shadow-sm bg-secondary"
-          />
-        ) : (
-          <div className="w-[100px] h-[100px] rounded-2xl bg-secondary flex items-center justify-center">
-            <Icon icon="solar:chef-hat-linear" className="text-muted-foreground size-8" />
-          </div>
+      <span className="relative flex h-[84px] w-[84px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-subtle">
+        {r.photoUrl
+          ? <img src={r.photoUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+          : <UtensilsCrossed size={26} className="text-border-strong" aria-hidden="true" />}
+      </span>
+
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="truncate text-[17px] font-semibold leading-tight text-ink">{r.name}</span>
+        {placeSubtitle(r) && <span className="truncate text-[13px] text-muted">{placeSubtitle(r)}</span>}
+        {(r.vibes.length > 0 || price) && (
+          <span className="flex flex-wrap gap-1.5">
+            {r.vibes.map((v) => <VibeTag key={v} vibe={v} />)}
+            {price && <Tag>{price}</Tag>}
+          </span>
         )}
-        
-        {restaurant.userScore ? (
-          <div className="absolute top-1.5 right-1.5 bg-background/90 backdrop-blur-sm px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-            <span className="text-xs font-bold text-foreground">{restaurant.userScore}</span>
-            <span className="text-[10px] font-medium text-muted-foreground">/10</span>
-          </div>
-        ) : restaurant.rating ? (
-          <div className="absolute top-1.5 right-1.5 bg-background/90 backdrop-blur-sm px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
-            <Icon icon="solar:star-bold" className="text-orange-400" width={12} height={12} />
-            <span className="text-xs font-bold text-foreground">{restaurant.rating}</span>
-          </div>
+        {raters.length > 0 ? (
+          <span className="flex items-center gap-1.5">
+            <AvatarStack
+              people={raters.map((rev) => ({ id: rev.user_id, first_name: rev.authorName ?? null, last_name: null, avatar_url: rev.authorAvatar ?? null }))}
+              max={4}
+              size={18}
+            />
+            <span className="text-[11px] text-muted">
+              {memberCount > 1 ? `${raters.length} of ${memberCount} rated` : "Rated"}
+            </span>
+          </span>
+        ) : r.addedBy ? (
+          <span className="flex items-center gap-1.5">
+            <Avatar person={r.addedBy} size={18} />
+            <span className="text-[11px] text-muted">Added by {displayName(r.addedBy)}</span>
+          </span>
         ) : null}
+      </span>
 
-        {restaurant.visited && (
-          <div className="absolute -bottom-2 -right-2 bg-green-500 text-white rounded-full p-1 border-2 border-card shadow-sm flex items-center justify-center">
-            <Icon icon="solar:check-read-linear" width={14} height={14} />
-          </div>
-        )}
-      </div>
-
-      <div className="flex-1 py-1 flex flex-col justify-center overflow-hidden">
-        <h3 className="font-heading font-bold text-base leading-tight mb-0.5 truncate">
-          {restaurant.name}
-        </h3>
-        <p className="text-[11px] text-muted-foreground font-medium mb-2.5 truncate">
-          {restaurant.primaryType ? `${formatPrimaryType(restaurant.primaryType)} • ` : ''}
-          {restaurant.address}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {(!restaurant.visited && restaurant.userScore) ? (
-            <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold tracking-wide uppercase flex items-center gap-1 border border-emerald-100">
-              <Icon icon="solar:check-read-linear" width={10} height={10} /> You've been here
-            </span>
-          ) : null}
-          {restaurant.vibes.map((vibe) => (
-            <span key={vibe} className="px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-[10px] font-bold tracking-wide uppercase">
-              {vibe}
-            </span>
-          ))}
-          {restaurant.priceLevel && (
-            <span className="px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold tracking-wide">
-              {formatPriceLevel(restaurant.priceLevel)}
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
+      <ScoreCircle avgScore={r.avgScore} googleRating={r.rating} />
+    </button>
   );
 }
 
 export function RestaurantCardSkeleton() {
   return (
-    <div className="bg-card rounded-[1.5rem] p-3 shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-border/50 flex gap-4 animate-pulse">
-      <div className="w-[100px] h-[100px] rounded-2xl bg-secondary/70 shrink-0" />
-      <div className="flex-1 py-1 flex flex-col justify-center space-y-2">
-        <div className="h-4 bg-secondary/80 rounded-md w-3/4" />
-        <div className="h-3 bg-secondary/50 rounded-md w-1/2" />
-        <div className="flex gap-2 pt-1">
-          <div className="h-5 bg-secondary/60 rounded-full w-14" />
-          <div className="h-5 bg-secondary/60 rounded-full w-12" />
-        </div>
+    <div className="flex items-center gap-3.5 rounded-[22px] border border-border bg-surface p-2.5" aria-hidden="true">
+      <div className="h-[84px] w-[84px] shrink-0 animate-pulse rounded-2xl bg-subtle" />
+      <div className="flex flex-1 flex-col gap-2">
+        <div className="h-4 w-3/4 animate-pulse rounded-md bg-subtle" />
+        <div className="h-3 w-1/2 animate-pulse rounded-md bg-subtle" />
+        <div className="h-4 w-16 animate-pulse rounded-full bg-subtle" />
       </div>
+      <div className="h-[52px] w-[52px] shrink-0 animate-pulse rounded-full bg-subtle" />
     </div>
   );
 }
-

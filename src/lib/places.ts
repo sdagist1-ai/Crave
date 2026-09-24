@@ -19,6 +19,9 @@ export type PlaceResult = {
   photoUrl?: string;
   openNow?: boolean;
   openingHours?: string[];
+  city: string | null;
+  area: string | null;
+  countryCode: string | null;
 };
 
 export type Coords = { lat: number; lng: number };
@@ -62,7 +65,13 @@ export async function cachePlacePhoto(photoName: string, placeId: string): Promi
 }
 
 async function placeDetails(placeId: string) {
-  return callPlaces<{ openingHours: string[] | null; photoName: string | null }>({ action: "details", placeId });
+  return callPlaces<{
+    openingHours: string[] | null;
+    photoName: string | null;
+    city: string | null;
+    area: string | null;
+    countryCode: string | null;
+  }>({ action: "details", placeId });
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -79,6 +88,9 @@ export async function syncRestaurantData(placeId: string, supabaseId: number) {
         last_synced_at: new Date().toISOString(),
         ...(details.openingHours ? { opening_hours: details.openingHours } : {}),
         ...(photoUrl ? { photo_url: photoUrl } : {}),
+        ...(details.countryCode
+          ? { city: details.city, area: details.area, country_code: details.countryCode }
+          : {}),
       })
       .eq("id", supabaseId);
     if (error) throw error;

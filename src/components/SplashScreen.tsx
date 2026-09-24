@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { C } from "../constants/theme";
 
 export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
   const [phase, setPhase] = useState<"writing" | "eating" | "done">("writing");
@@ -30,13 +29,13 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
   return (
     <div
       onClick={onComplete}
-      className="fixed inset-0 z-[100] bg-white flex items-center justify-center transition-opacity duration-200 overflow-hidden cursor-pointer"
+      className="fixed inset-0 z-[100] bg-background flex items-center justify-center transition-opacity duration-200 overflow-hidden cursor-pointer"
       style={{ opacity: phase === "done" ? 0 : 1 }}
     >
       <style>{`
         .crave-splash-text {
-          font-family: var(--font-heading);
-          letter-spacing: -2px;
+          font-family: var(--font-display);
+          letter-spacing: -0.04em;
         }
 
         @keyframes bite {
@@ -49,8 +48,7 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
       <div className="relative w-full max-w-[280px] h-32 flex items-center justify-center">
         {/* The Text - Visible immediately */}
         <h1
-          className="crave-splash-text text-6xl font-black italic tracking-tighter"
-          style={{ color: C.rose }}
+          className="crave-splash-text text-[64px] font-extrabold text-accent"
         >
           Crave
         </h1>
@@ -75,13 +73,13 @@ function CartoonBite({ className, delay }: { className: string, delay: string })
   return (
     <div className={`absolute opacity-0 flex items-center justify-center ${className}`}
       style={{ animation: `bite 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${delay} forwards` }}>
-      <div className="absolute w-[80%] h-[80%] bg-white rounded-full" />
+      <div className="absolute w-[80%] h-[80%] bg-background rounded-full" />
       {Array.from({ length: 12 }).map((_, i) => {
         const angle = (i / 12) * Math.PI * 2;
         const x = Math.cos(angle) * 40;
         const y = Math.sin(angle) * 40;
         return (
-          <div key={i} className="absolute w-[35%] h-[35%] bg-white rounded-full"
+          <div key={i} className="absolute w-[35%] h-[35%] bg-background rounded-full"
             style={{ transform: `translate(${x}%, ${y}%)` }} />
         );
       })}

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Icon } from "@iconify/react";
+import { Loader2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "../lib/supabase";
+import { Glow, PrimaryButton, TextField } from "../components/ui";
 
 // Auth emails link back into the app: the custom URL scheme on iOS, or the
 // current site (e.g. the Vercel deployment) when running in a browser.
@@ -73,89 +74,54 @@ export function AuthScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 font-sans animate-in fade-in zoom-in-[0.98] duration-700">
-      <div className="w-full max-w-sm flex flex-col items-center">
-        <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center shadow-sm mb-6">
-          <Icon icon="ph:fork-knife-fill" className="text-primary-foreground text-3xl" />
-        </div>
-        <h1 className="font-heading text-[42px] font-black text-foreground leading-none mb-2 tracking-tight">
-          Crave
-        </h1>
-        <p className="text-[17px] font-medium text-muted-foreground mb-10 text-center">
-          Your personal restaurant wishlist
-        </p>
-        
-        <div className="w-full space-y-4">
-          {isSignUp && (
-            <div className="flex gap-4 animate-in slide-in-from-top-4 fade-in duration-300">
-              <input
-                type="text"
-                placeholder="First Name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-1/2 px-6 py-5 rounded-[2.5rem] border border-border/50 bg-card text-[16px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-all shadow-sm"
-              />
-              <input
-                type="text"
-                placeholder="Last Name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-1/2 px-6 py-5 rounded-[2.5rem] border border-border/50 bg-card text-[16px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-all shadow-sm"
-              />
-            </div>
-          )}
-          
-          <div className="relative">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-8 py-5 rounded-[2.5rem] border border-border/50 bg-card text-[16px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-all shadow-sm"
-              placeholder="Email"
-            />
-          </div>
-          
-          <div className="relative">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-8 py-5 rounded-[2.5rem] border border-border/50 bg-card text-[16px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-all shadow-sm"
-              placeholder="Password"
-            />
-          </div>
-
-          {!isSignUp && (
-            <div className="flex justify-end px-2 pt-1">
-              <button 
-                onClick={handleResetPassword}
-                disabled={loading}
-                className="text-sm font-semibold text-primary hover:underline transition-all"
-              >
-                Forgot Password?
-              </button>
-            </div>
-          )}
+    <div className="relative flex min-h-full flex-col overflow-hidden bg-background">
+      <Glow side="right" />
+      <form
+        className="relative mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-3 px-6 pt-safe pb-safe"
+        onSubmit={(e) => { e.preventDefault(); if (email && password) handleSubmit(); }}
+      >
+        <div className="mb-8">
+          <div className="mb-3 font-mono text-xs tracking-[0.14em] text-muted uppercase">Your crew's restaurant list</div>
+          <h1 className="m-0 font-display text-[64px] leading-[0.9] font-extrabold tracking-[-0.04em] text-accent">Crave</h1>
+          <p className="m-0 mt-3 text-[15px] text-muted">
+            {isSignUp ? "Create an account to start saving spots." : "Sign in to pick up where you left off."}
+          </p>
         </div>
 
-        {error && <p className="text-destructive text-sm font-bold mt-4 w-full text-center">{error}</p>}
-        {message && <p className="text-primary text-sm font-bold mt-4 w-full text-center">{message}</p>}
+        {isSignUp && (
+          <div className="flex gap-3 animate-rise">
+            <TextField label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" />
+            <TextField label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
+          </div>
+        )}
+        <TextField label="Email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none"
+          value={email} onChange={(e) => setEmail(e.target.value)} />
+        <TextField label="Password" type="password" autoComplete={isSignUp ? "new-password" : "current-password"}
+          value={password} onChange={(e) => setPassword(e.target.value)} />
 
-        <button 
-          onClick={handleSubmit} 
-          disabled={loading || !email || !password}
-          className="w-full py-5 rounded-[2.5rem] bg-primary text-primary-foreground font-bold text-[18px] shadow-2xl shadow-primary/40 mt-6 active:scale-[0.98] transition-all disabled:opacity-50"
-        >
-          {loading ? "Please wait..." : isSignUp ? "Sign Up" : "Sign In"}
+        {!isSignUp && (
+          <button type="button" onClick={handleResetPassword} disabled={loading}
+            className="-mt-1 h-11 self-end text-sm font-semibold text-accent-ink">
+            Forgot password?
+          </button>
+        )}
+
+        <div aria-live="polite" className="min-h-5 text-center text-sm">
+          {error && <span className="text-danger">{error}</span>}
+          {message && <span className="text-mint-ink">{message}</span>}
+        </div>
+
+        <PrimaryButton type="submit" disabled={loading || !email || !password} tone="accent">
+          {loading && <Loader2 size={18} className="animate-spin" />}
+          {isSignUp ? "Create account" : "Sign in"}
+        </PrimaryButton>
+
+        <button type="button" onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null); }}
+          className="h-11 text-[15px] text-muted">
+          {isSignUp ? <>Already have an account? <span className="font-semibold text-ink">Sign in</span></>
+            : <>New to Crave? <span className="font-semibold text-ink">Create an account</span></>}
         </button>
-        
-        <button 
-          onClick={() => { setIsSignUp(!isSignUp); setError(null); setMessage(null); }}
-          className="mt-6 text-[15px] font-semibold text-muted-foreground hover:text-foreground transition-all"
-        >
-          {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
-        </button>
-      </div>
+      </form>
     </div>
   );
 }

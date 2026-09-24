@@ -9,6 +9,8 @@
 // POST { action: "search", query, lat?, lng? }  -> { places: PlaceResult[] }
 // POST { action: "details", placeId }           -> { openingHours, photoName }
 // POST { action: "photo", photoName, placeId }  -> { url }  (cached in Storage)
+// POST { action: "backfill_locations" }         -> { updated, remaining }
+//      Service role only: fills city/area/country_code for saved places.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
@@ -17,6 +19,7 @@ const PLACES = "https://places.googleapis.com/v1";
 const SEARCH_FIELDS = [
   "id", "displayName", "formattedAddress", "location", "rating", "userRatingCount",
   "priceLevel", "primaryType", "photos", "currentOpeningHours", "regularOpeningHours",
+  "addressComponents",
 ].map((f) => `places.${f}`).join(",");
 
 const CORS = {
@@ -40,7 +43,35 @@ type GooglePlace = {
   photos?: { name: string }[];
   currentOpeningHours?: { openNow?: boolean };
   regularOpeningHours?: { weekdayDescriptions?: string[] };
+  addressComponents?: { longText: string; shortText: string; types: string[] }[];
 };
+
+// City for Passport counts, a neighbourhood-level `area` for cards, country code.
+function locationOf(p: GooglePlace) {
+  const find = (...types: string[]) => {
+    for (const type of types) {
+      const c = p.addressComponents?.find((c) => c.types.includes(type));
+      if (c) return c;
+    }
+    return undefined;
+  };
+  const city = find("locality", "postal_town", "administrative_area_level_2")?.longText ?? null;
+  const area = find("neighborhood", "sublocality_level_1", "sublocality")?.longText ?? city;
+  const countryCode = find("country")?.shortText ?? null;
+  return { city, area, countryCode };
+}
+
+function isServiceRole(req: Request) {
+  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  if (token && token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return true;
+  try {
+    // The gateway has already verified the JWT signature (verify_jwt = true).
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload.role === "service_role";
+  } catch {
+    return false;
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -63,6 +94,7 @@ function toPlaceResult(p: GooglePlace) {
     photoUrl: p.photos?.[0]?.name,
     openNow: p.currentOpeningHours?.openNow,
     openingHours: p.regularOpeningHours?.weekdayDescriptions,
+    ...locationOf(p),
   };
 }
 
@@ -100,7 +132,7 @@ async function details(placeId: unknown) {
   }
 
   const res = await fetch(`${PLACES}/places/${placeId}`, {
-    headers: { "X-Goog-Api-Key": GOOGLE_KEY!, "X-Goog-FieldMask": "regularOpeningHours,photos" },
+    headers: { "X-Goog-Api-Key": GOOGLE_KEY!, "X-Goog-FieldMask": "regularOpeningHours,photos,addressComponents" },
   });
   if (!res.ok) {
     console.error("place details failed", res.status, await res.text());
@@ -111,7 +143,43 @@ async function details(placeId: unknown) {
   return json({
     openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
     photoName: place.photos?.[0]?.name ?? null,
+    ...locationOf(place),
   });
+}
+
+async function backfillLocations() {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data: rows, error } = await admin
+    .from("restaurants")
+    .select("place_id")
+    .is("country_code", null)
+    .limit(1000);
+  if (error) return json({ error: error.message }, 500);
+
+  const placeIds = [...new Set((rows ?? []).map((r) => r.place_id))].slice(0, 60);
+  let updated = 0;
+  for (const placeId of placeIds) {
+    if (!PLACE_ID_RE.test(placeId)) continue;
+    const res = await fetch(`${PLACES}/places/${placeId}`, {
+      headers: { "X-Goog-Api-Key": GOOGLE_KEY!, "X-Goog-FieldMask": "addressComponents" },
+    });
+    if (!res.ok) {
+      console.error("backfill details failed", placeId, res.status);
+      continue;
+    }
+    const { city, area, countryCode } = locationOf(await res.json() as GooglePlace);
+    const { error: updateError } = await admin
+      .from("restaurants")
+      .update({ city, area, country_code: countryCode })
+      .eq("place_id", placeId);
+    if (!updateError) updated++;
+  }
+
+  const { count } = await admin
+    .from("restaurants")
+    .select("id", { count: "exact", head: true })
+    .is("country_code", null);
+  return json({ updated, remaining: count ?? null });
 }
 
 async function photo(photoName: unknown, placeId: unknown) {
@@ -158,6 +226,8 @@ Deno.serve(async (req) => {
       case "search": return await search(payload.query, payload.lat, payload.lng);
       case "details": return await details(payload.placeId);
       case "photo": return await photo(payload.photoName, payload.placeId);
+      case "backfill_locations":
+        return isServiceRole(req) ? await backfillLocations() : json({ error: "forbidden" }, 403);
       default: return json({ error: "unknown_action" }, 400);
     }
   } catch (err) {

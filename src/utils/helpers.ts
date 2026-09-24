@@ -1,16 +1,6 @@
-import dayjs from "../lib/dayjs";
-import { Restaurant, SortOption } from "../types";
-import { VIBE_COLOR_MAP, C } from "../constants/theme";
+import type { Restaurant } from "../types";
 
-export function getUserTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
-
-export function getVibeColor(vibe: string): string {
-  return VIBE_COLOR_MAP[vibe] || C.slate400;
-}
-
-export function formatPriceLevel(level: string | null): string {
+export function formatPriceLevel(level: string | null | undefined): string {
   if (!level) return "";
   const map: Record<string, string> = {
     PRICE_LEVEL_FREE: "Free",
@@ -24,29 +14,35 @@ export function formatPriceLevel(level: string | null): string {
 
 export function formatPrimaryType(type: string | null | undefined): string {
   if (!type) return "";
-  if (type === "restaurant") return "Restaurant";
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  const words = type.replace(/_restaurant$/, "").split("_");
+  const label = words.join(" ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function sortRestaurants(list: Restaurant[], sort: SortOption): Restaurant[] {
-  const copy = [...list];
-  switch (sort) {
-    case "rating":
-      return copy.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-    case "score":
-      return copy.sort((a, b) => (b.userScore ?? 0) - (a.userScore ?? 0));
-    case "visited":
-      return copy.sort((a, b) => {
-        if (!a.visitedAt && !b.visitedAt) return 0;
-        if (!a.visitedAt) return 1;
-        if (!b.visitedAt) return -1;
-        return dayjs(b.visitedAt).tz(getUserTimeZone()).valueOf() - dayjs(a.visitedAt).tz(getUserTimeZone()).valueOf();
-      });
-    case "newest":
-    default:
-      return copy; // already sorted newest first from server
-  }
+/** "Ice cream · Brooklyn" */
+export function placeSubtitle(r: Pick<Restaurant, "primaryType" | "area">): string {
+  return [formatPrimaryType(r.primaryType), r.area].filter(Boolean).join(" · ");
+}
+
+/** Today's line from Google's weekday descriptions, e.g. "9 AM – 5 PM" or "Closed". */
+export function todaysHours(openingHours: string[] | null | undefined): string | null {
+  if (!openingHours?.length) return null;
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long" });
+  const row = openingHours.find((d) => d.startsWith(today));
+  if (!row) return null;
+  return row.slice(row.indexOf(":") + 1).trim().replace(/:00/g, "").replace(/\u202f/g, " ") || null;
+}
+
+export function mapsLinks(r: Pick<Restaurant, "name" | "address">) {
+  const q = encodeURIComponent(`${r.name}, ${r.address}`);
+  return {
+    apple: `https://maps.apple.com/?daddr=${q}`,
+    google: `https://www.google.com/maps/dir/?api=1&destination=${q}`,
+    waze: `https://waze.com/ul?q=${q}&navigate=yes`,
+  };
+}
+
+/** 8.5 → "8.5", 10 → "10" (a perfect score doesn't fit as "10.0"). */
+export function formatScore(n: number) {
+  return n >= 10 ? "10" : n.toFixed(1);
 }

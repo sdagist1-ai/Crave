@@ -1,49 +1,34 @@
-import { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
-import { QueryClient, focusManager, useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
-import { Search, User, ChevronDown } from "lucide-react";
-import { supabase } from "./lib/supabase";
-import { fetchRestaurants } from "./lib/restaurants";
+import { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { QueryClient, focusManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { ScreenOrientation } from "@capacitor/screen-orientation";
 import { App as CapacitorApp } from "@capacitor/app";
-import { Session } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 
-// Types & Theme
-import { Restaurant, TabId, Group, SortOption } from "./types";
-import { C } from "./constants/theme";
+import { supabase } from "./lib/supabase";
+import { fetchRestaurants } from "./lib/restaurants";
+import { fetchMyGroups } from "./lib/groups";
+import type { Restaurant, TabId } from "./types";
 
-// Components
 import { BottomTabBar } from "./components/BottomTabBar";
 import { AnimatedSplash } from "./components/SplashScreen";
 import { RestaurantCardSkeleton } from "./components/RestaurantCard";
-
-// Code-split heavy modals and overlays
-const SearchOverlay = lazy(() => import("./components/SearchOverlay").then(m => ({ default: m.SearchOverlay })));
-import type { SavedPlace } from "./components/SearchOverlay";
-const RateSheet = lazy(() => import("./components/RateSheet").then(m => ({ default: m.RateSheet })));
-const RestaurantDetailSheet = lazy(() => import("./components/RestaurantDetailSheet").then(m => ({ default: m.RestaurantDetailSheet })));
-
-// Primary screen loaded statically
 import { ListTab } from "./screens/ListTab";
+import type { SavedPlace } from "./components/SearchOverlay";
 
-// Secondary screens code-split to remove Mapbox and heavy bundles from the initial load
-const ProfileTab = lazy(() => import("./screens/ProfileTab").then(m => ({ default: m.ProfileTab })));
-const CalendarTab = lazy(() => import("./screens/CalendarTab").then(m => ({ default: m.CalendarTab })));
-const SpinTab = lazy(() => import("./screens/SpinTab").then(m => ({ default: m.SpinTab })));
-const PassportTab = lazy(() => import("./screens/PassportTab").then(m => ({ default: m.PassportTab })));
-const AuthScreen = lazy(() => import("./screens/AuthScreen").then(m => ({ default: m.AuthScreen })));
-const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen").then(m => ({ default: m.OnboardingScreen })));
-const UpdatePasswordScreen = lazy(() => import("./screens/UpdatePasswordScreen").then(m => ({ default: m.UpdatePasswordScreen })));
-// ─── Supabase helpers ────────────────────────────────────────
-async function fetchGroups(): Promise<Group[]> {
-  const { data, error } = await supabase
-    .from("groups")
-    .select("*")
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
+// Everything not on the first screen is code-split.
+const SearchOverlay = lazy(() => import("./components/SearchOverlay").then((m) => ({ default: m.SearchOverlay })));
+const RateSheet = lazy(() => import("./components/RateSheet").then((m) => ({ default: m.RateSheet })));
+const RestaurantDetail = lazy(() => import("./components/RestaurantDetail").then((m) => ({ default: m.RestaurantDetail })));
+const ProfileTab = lazy(() => import("./screens/ProfileTab").then((m) => ({ default: m.ProfileTab })));
+const SpinTab = lazy(() => import("./screens/SpinTab").then((m) => ({ default: m.SpinTab })));
+const PassportTab = lazy(() => import("./screens/PassportTab").then((m) => ({ default: m.PassportTab })));
+const AuthScreen = lazy(() => import("./screens/AuthScreen").then((m) => ({ default: m.AuthScreen })));
+const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen").then((m) => ({ default: m.OnboardingScreen })));
+const UpdatePasswordScreen = lazy(() => import("./screens/UpdatePasswordScreen").then((m) => ({ default: m.UpdatePasswordScreen })));
+
+const ACTIVE_GROUP_KEY = "crave_active_group";
 
 async function fetchSavedPlaces(): Promise<SavedPlace[]> {
   const { data, error } = await supabase
@@ -60,97 +45,52 @@ async function fetchSavedPlaces(): Promise<SavedPlace[]> {
   }));
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Brand & Avatar Visual Generators
-// ═══════════════════════════════════════════════════════════════
-const getGroupColor = (str: string) => {
-  const colors = [C.rose, C.amber, C.emerald, "#06b6d4", "#8B5CF6", "#F43F5E", "#EAB308"];
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-};
-
-const getGroupInitials = (name: string) => {
-  const parts = name.split(" ").filter(p => p.length > 0);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return "✨";
-};
+function readStoredGroup() {
+  try { return localStorage.getItem(ACTIVE_GROUP_KEY); } catch { return null; }
+}
 
 function AppShellSkeleton() {
   return (
-    <div className="h-screen w-full flex flex-col bg-background text-foreground animate-pulse">
-      {/* Header Skeleton */}
-      <header className="px-4 pt-safe-or-4 pb-4 flex items-center justify-between gap-3 border-b border-border/50">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-secondary/80" />
-          <div className="h-5 w-24 bg-secondary/80 rounded-md" />
-        </div>
-        <div className="w-9 h-9 rounded-full bg-secondary/80" />
-      </header>
-
-      {/* Tabs & Filter Pill Skeletons */}
-      <div className="px-4 pt-4 pb-2 space-y-3">
-        <div className="flex justify-center">
-          <div className="h-10 w-48 bg-secondary/70 rounded-full" />
-        </div>
-        <div className="flex gap-2 overflow-hidden">
-          <div className="h-8 w-24 bg-secondary/60 rounded-full shrink-0" />
-          <div className="h-8 w-24 bg-secondary/60 rounded-full shrink-0" />
-          <div className="h-8 w-24 bg-secondary/60 rounded-full shrink-0" />
-        </div>
+    <div className="flex h-full flex-col gap-4 bg-background px-5 pt-safe" aria-busy="true" aria-label="Loading">
+      <div className="flex items-center justify-between pt-2">
+        <div className="h-11 w-44 animate-pulse rounded-full bg-subtle" />
+        <div className="h-11 w-11 animate-pulse rounded-full bg-subtle" />
       </div>
-
-      {/* Restaurant Card Skeletons */}
-      <div className="flex-1 px-4 py-2 space-y-4 overflow-hidden">
-        {[1, 2, 3, 4].map((i) => (
-          <RestaurantCardSkeleton key={i} />
-        ))}
-      </div>
-
-      {/* Bottom Bar Skeleton */}
-      <div className="h-20 border-t border-border/50 flex items-center justify-around px-6 bg-background/80">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex flex-col items-center gap-1.5">
-            <div className="w-6 h-6 rounded-full bg-secondary/80" />
-            <div className="w-8 h-2 rounded bg-secondary/60" />
-          </div>
-        ))}
-      </div>
+      <div className="h-3 w-32 animate-pulse rounded bg-subtle" />
+      <div className="h-24 w-64 animate-pulse rounded-xl bg-subtle" />
+      <div className="h-[50px] animate-pulse rounded-2xl bg-subtle" />
+      {[0, 1, 2].map((i) => <RestaurantCardSkeleton key={i} />)}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Main App Shell
+// Signed-in app shell
 // ═══════════════════════════════════════════════════════════════
-function CraveApp({ sessionUid }: { sessionUid: string }) {
-  const [activeTab, setActiveTab] = useState<TabId>("list");
-  const [showSearch, setShowSearch] = useState(false);
-  const [ratingRestaurant, setRatingRestaurant] = useState<Restaurant | null>(null);
-  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
-  const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
+function CraveApp({ uid }: { uid: string }) {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabId>("list");
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set(["list"]));
+  const [addQuery, setAddQuery] = useState<string | null>(null); // non-null = "add a place" open
+  const [detail, setDetail] = useState<Restaurant | null>(null);
+  const [rating, setRating] = useState<Restaurant | null>(null);
+  const [storedGroupId, setStoredGroupId] = useState<string | null>(readStoredGroup);
 
-  // Filter States (Hoisted from ListTab)
-  const [filterTab, setFilterTab] = useState<"cravelist" | "tried">("cravelist");
-  const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const [filterVibes, setFilterVibes] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const groupsQuery = useQuery({ queryKey: ["groups", uid], queryFn: fetchMyGroups });
+  const groups = groupsQuery.data ?? [];
+  // Fall back to the first list if the stored one was left or deleted.
+  const group = groups.find((g) => g.id === storedGroupId) ?? groups[0];
+  const groupId = group?.id;
 
-  // 1. Fetch Workspaces
-  const groupsQuery = useQuery({
-    queryKey: ["groups"],
-    queryFn: fetchGroups,
-  });
+  const selectGroup = (id: string) => {
+    setStoredGroupId(id);
+    try { localStorage.setItem(ACTIVE_GROUP_KEY, id); } catch { /* storage unavailable */ }
+  };
 
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(() => localStorage.getItem("crave_active_group") || null);
-
-  const derivedGroupId = activeGroupId || (groupsQuery.data && groupsQuery.data.length > 0 ? groupsQuery.data[0].id : null);
-
-  useEffect(() => {
-    if (derivedGroupId) localStorage.setItem("crave_active_group", derivedGroupId);
-  }, [derivedGroupId]);
+  const changeTab = (tab: TabId) => {
+    setActiveTab(tab);
+    setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  };
 
   // Live updates from other members. Restaurant changes are filtered to the list
   // being viewed; reviews/groups are already limited to co-members by RLS.
@@ -159,8 +99,8 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
   useEffect(() => {
     const pending = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const invalidate = (key: "restaurants" | "groups") => {
-      pending.add(key);
+    const invalidate = (...keys: string[]) => {
+      keys.forEach((k) => pending.add(k));
       clearTimeout(timer);
       timer = setTimeout(() => {
         pending.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
@@ -168,101 +108,61 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
       }, 400);
     };
 
-    const channel = supabase.channel(`crave-sync-${derivedGroupId ?? "none"}`)
+    const channel = supabase.channel(`crave-sync-${groupId ?? "none"}`)
       .on("postgres_changes", {
         event: "*", schema: "public", table: "restaurants",
-        ...(derivedGroupId ? { filter: `group_id=eq.${derivedGroupId}` } : {}),
-      }, () => invalidate("restaurants"))
-      .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => invalidate("restaurants"))
+        ...(groupId ? { filter: `group_id=eq.${groupId}` } : {}),
+      }, () => invalidate("restaurants", "groups"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => invalidate("restaurants", "groups"))
       .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, () => invalidate("groups"))
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => invalidate("groups"))
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => invalidate("groups"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => invalidate("groups", "restaurants"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => invalidate("groups", "restaurants"))
       .subscribe();
 
     return () => {
       clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, [queryClient, derivedGroupId]);
+  }, [queryClient, groupId]);
 
-  // 2. Fetch Restaurants dynamically scoped to the Workspace
-  const restaurantsQuery = useInfiniteQuery({
-    queryKey: ["restaurants", sessionUid, derivedGroupId, filterTab, filterCategory, filterVibes, sortBy],
-    queryFn: ({ pageParam }) => fetchRestaurants({
-      uid: sessionUid, 
-      groupId: derivedGroupId!,
-      pageParam: pageParam as string | null,
-      filterTab, filterCategory, filterVibes, sortBy
-    }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: !!derivedGroupId && !!sessionUid
-  });
-
-  // Defer heavy background syncs until the main UI has successfully loaded its primary data
-  // This prevents connection pooling bottlenecks and massive network waterfalls on app launch!
-  const isMainUIReady = restaurantsQuery.isSuccess;
-
-  // Track visited tabs so off-screen tabs and heavy modules (like Mapbox) only load on demand
-  const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => new Set([activeTab]));
-
-  const handleTabChange = (tab: TabId) => {
-    setActiveTab(tab);
-    setVisitedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      const next = new Set(prev);
-      next.add(tab);
-      return next;
-    });
-  };
-
-  // 3. Every place saved across the user's lists (RLS limits rows to their groups).
-  // Lightweight columns only; powers "already saved" badges and cloning in search.
-  const savedPlacesQuery = useQuery({
-    queryKey: ["restaurants", "saved-places", sessionUid],
-    queryFn: fetchSavedPlaces,
-    enabled: !!sessionUid && showSearch,
-  });
-
-  // 4. Workspace ALL query (for Passport & Calendar) - only active when user visits Passport or Calendar!
-  const shouldFetchWorkspaceAll = visitedTabs.has("passport") || visitedTabs.has("calendar");
-  const workspaceAllRestaurantsQuery = useInfiniteQuery({
-    queryKey: ["restaurants", "workspace-all", sessionUid, derivedGroupId],
-    queryFn: ({ pageParam }) => fetchRestaurants({
-      uid: sessionUid,
-      groupId: derivedGroupId!,
-      pageParam: pageParam as string | null,
-      all: true,
-    }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: !!derivedGroupId && !!sessionUid && isMainUIReady && shouldFetchWorkspaceAll,
-  });
-
-  // ⚡️ IDLE PREFETCHING: Pre-warm code chunks & cache silently during idle time once the list is ready!
+  // Warm the light code chunks once the list is on screen.
   useEffect(() => {
-    if (!isMainUIReady || !derivedGroupId) return;
-
-    // Warm only the light code chunks. PassportTab (1.8 MB of Mapbox) and its
-    // 1000-row query load when the tab is first opened, not right after launch.
-    const warmBackgroundTabs = () => {
+    if (!groupId) return;
+    const warm = () => {
       import("./screens/ProfileTab");
       import("./screens/SpinTab");
-      import("./screens/CalendarTab");
+      import("./screens/PassportTab");
       import("./components/SearchOverlay");
-      import("./components/RestaurantDetailSheet");
+      import("./components/RestaurantDetail");
+      import("./components/RateSheet");
     };
-
-    // Use requestIdleCallback if available, fallback to 1200ms timeout for Safari
-    const win = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
-    if (typeof win.requestIdleCallback === "function") {
-      const handle = win.requestIdleCallback(warmBackgroundTabs, { timeout: 2500 });
-      return () => win.cancelIdleCallback?.(handle);
-    } else {
-      const timer = setTimeout(warmBackgroundTabs, 1200);
-      return () => clearTimeout(timer);
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(warm, { timeout: 2500 });
+      return () => w.cancelIdleCallback?.(id);
     }
-  }, [isMainUIReady, derivedGroupId]);
+    const t = setTimeout(warm, 1200);
+    return () => clearTimeout(t);
+  }, [groupId]);
+
+  // "Already saved" badges in add-a-place cover every list, not just this one.
+  const savedPlaces = useQuery({
+    queryKey: ["restaurants", "saved-places", uid],
+    queryFn: fetchSavedPlaces,
+    enabled: addQuery !== null,
+  });
+
+  // The open detail page reads its own row, so it reflects new ratings wherever
+  // it was opened from.
+  const detailQuery = useQuery({
+    queryKey: ["restaurants", "detail", uid, detail?.groupId, detail?.id],
+    queryFn: async () => {
+      const { restaurants } = await fetchRestaurants({ uid, groupId: detail!.groupId, restaurantId: detail!.id });
+      return restaurants[0] ?? null;
+    },
+    enabled: !!detail,
+  });
+  const liveDetail = detail ? (detailQuery.data?.id === detail.id ? detailQuery.data : detail) : null;
 
   type RestaurantPages = { pages: { restaurants: Restaurant[] }[] };
   const removeMutation = useMutation({
@@ -276,158 +176,93 @@ function CraveApp({ sessionUid }: { sessionUid: string }) {
       queryClient.setQueriesData<RestaurantPages>({ queryKey: ["restaurants"] }, (old) =>
         old?.pages
           ? { ...old, pages: old.pages.map((p) => ({ ...p, restaurants: p.restaurants.filter((r) => r.id !== id) })) }
-          : old
+          : old,
       );
       return { previous };
     },
     onError: (_err, _id, context) => {
       context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
     },
-    onSettled: () => { queryClient.invalidateQueries({ queryKey: ["restaurants"] }); },
-  });
-
-  const activeGroup = groupsQuery.data?.find(g => g.id === derivedGroupId);
-
-  const allRestaurants: Restaurant[] = useMemo(() => restaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [restaurantsQuery.data]);
-  const workspaceAllRestaurants: Restaurant[] = useMemo(() => workspaceAllRestaurantsQuery.data?.pages.flatMap(p => p.restaurants) || [], [workspaceAllRestaurantsQuery.data]);
-
-  // The open detail sheet reads its own row from the database, so it reflects new
-  // ratings/photos wherever it was opened from (list, spin, passport, calendar).
-  const detailQuery = useQuery({
-    queryKey: ["restaurants", "detail", sessionUid, detailRestaurant?.groupId, detailRestaurant?.id],
-    queryFn: async () => {
-      const { restaurants } = await fetchRestaurants({
-        uid: sessionUid, groupId: detailRestaurant!.groupId, restaurantId: detailRestaurant!.id,
-      });
-      return restaurants[0] ?? null;
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
     },
-    enabled: !!detailRestaurant,
   });
-  const syncedDetailRestaurant = detailRestaurant
-    ? (detailQuery.data?.id === detailRestaurant.id ? detailQuery.data : detailRestaurant)
-    : null;
 
-  // Wait for background validation before blindly rendering empty states from old caches
-  // We only hold for group data to prevent crashing. Restaurant loading is handled gracefully by the tabs.
-  const isHoldingForData = 
-    groupsQuery.isLoading || 
-    (groupsQuery.isFetching && groupsQuery.data?.length === 0);
+  if (groupsQuery.isPending) return <AppShellSkeleton />;
 
-  if (isHoldingForData) {
-    return <AppShellSkeleton />;
+  if (groupsQuery.isError && groups.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+        <h1 className="m-0 font-display text-3xl font-extrabold">Can't reach Crave</h1>
+        <p className="m-0 text-muted">Check your connection and try again.</p>
+        <button type="button" onClick={() => groupsQuery.refetch()}
+          className="h-[54px] rounded-[18px] bg-ink px-6 font-semibold text-white">Try again</button>
+      </div>
+    );
   }
 
-  // 🚀 New User Onboarding Interceptor
-  // If the user has strictly zero groups, violently intercept the app shell to force list creation!
-  if (groupsQuery.isSuccess && groupsQuery.data.length === 0) {
+  if (groups.length === 0) {
     return (
       <Suspense fallback={<AppShellSkeleton />}>
-        <OnboardingScreen onComplete={() => queryClient.invalidateQueries({ queryKey: ["groups"] })} />
+        <OnboardingScreen onComplete={(id) => {
+          if (id) selectGroup(id);
+          queryClient.invalidateQueries({ queryKey: ["groups"] });
+        }} />
       </Suspense>
     );
   }
 
-  return (
-    <div className="h-screen w-full flex flex-col relative bg-background text-foreground animate-in fade-in zoom-in-[0.99] duration-700 ease-out">
-      <style>{`
-        *::-webkit-scrollbar { display: none; }
-      `}</style>
-
-      {/* Tab content */}
-      <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "list" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
-        <ListTab 
-          restaurants={allRestaurants} 
-          onDetail={setDetailRestaurant}
-          onOpenSearch={() => setShowSearch(true)}
-          fetchNextPage={() => restaurantsQuery.fetchNextPage()}
-          hasNextPage={!!restaurantsQuery.hasNextPage}
-          isFetchingNextPage={restaurantsQuery.isFetchingNextPage}
-          isLoading={restaurantsQuery.isLoading}
-          filterTab={filterTab}
-          setFilterTab={setFilterTab}
-          filterCategory={filterCategory}
-          setFilterCategory={setFilterCategory}
-          filterVibes={filterVibes}
-          setFilterVibes={setFilterVibes}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          activeGroup={activeGroup}
-          groups={groupsQuery.data || []}
-          setActiveGroupId={setActiveGroupId}
-          showWorkspaceDropdown={showWorkspaceDropdown}
-          setShowWorkspaceDropdown={setShowWorkspaceDropdown}
-        />
+  const tabPanel = (tab: TabId, node: React.ReactNode) =>
+    visitedTabs.has(tab) && (
+      <div className={`absolute inset-0 ${activeTab === tab ? "z-10" : "pointer-events-none invisible z-0"}`} aria-hidden={activeTab !== tab}>
+        <Suspense fallback={<AppShellSkeleton />}>{node}</Suspense>
       </div>
+    );
 
-      {visitedTabs.has("profile") && (
-        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "profile" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
-          <Suspense fallback={<AppShellSkeleton />}>
-            <ProfileTab />
-          </Suspense>
-        </div>
-      )}
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-background">
+      {tabPanel("list", (
+        <ListTab uid={uid} group={group} groups={groups} onSelectGroup={selectGroup}
+          onAdd={(q) => setAddQuery(q ?? "")} onOpen={setDetail} />
+      ))}
+      {tabPanel("passport", <PassportTab uid={uid} group={group} onOpen={setDetail} />)}
+      {tabPanel("spin", <SpinTab uid={uid} groupId={groupId} onOpen={setDetail} />)}
+      {tabPanel("profile", (
+        <ProfileTab uid={uid} groups={groups} activeGroupId={groupId} onSelectGroup={selectGroup} />
+      ))}
 
-      {visitedTabs.has("calendar") && (
-        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "calendar" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
-          <Suspense fallback={<AppShellSkeleton />}>
-            <CalendarTab 
-              restaurants={workspaceAllRestaurants} 
-              onDetail={setDetailRestaurant} 
-              groups={groupsQuery.data || []}
-              fetchNextPage={() => workspaceAllRestaurantsQuery.fetchNextPage()}
-              hasNextPage={!!workspaceAllRestaurantsQuery.hasNextPage}
-              isFetchingNextPage={workspaceAllRestaurantsQuery.isFetchingNextPage}
-            />
-          </Suspense>
-        </div>
-      )}
+      <BottomTabBar active={activeTab} onChange={changeTab} />
 
-      {visitedTabs.has("passport") && (
-        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "passport" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
-          <Suspense fallback={<AppShellSkeleton />}>
-            <PassportTab 
-              restaurants={workspaceAllRestaurants} 
-              onQuickStamp={() => setShowSearch(true)}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      {visitedTabs.has("spin") && (
-        <div className={`absolute inset-0 flex flex-col overflow-hidden transition-opacity duration-300 ${activeTab === "spin" ? "z-10 opacity-100 pointer-events-auto" : "z-0 opacity-0 pointer-events-none"}`}>
-          <Suspense fallback={<AppShellSkeleton />}>
-            <SpinTab onDetail={setDetailRestaurant} groupId={derivedGroupId!} />
-          </Suspense>
-        </div>
-      )}
-
-      {/* Bottom tab bar */}
-      <BottomTabBar active={activeTab} onChange={handleTabChange} />
-
-      {/* Detail sheet */}
-      {syncedDetailRestaurant && (
-        <Suspense fallback={null}>
-          <RestaurantDetailSheet
-            restaurant={syncedDetailRestaurant}
-            onRate={(r) => setRatingRestaurant(r)}
-            onRemove={(id) => { removeMutation.mutate(id); setDetailRestaurant(null); }}
-            onClose={() => setDetailRestaurant(null)}
-            myUid={sessionUid}
+      {liveDetail && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-background" />}>
+          <RestaurantDetail
+            restaurant={liveDetail}
+            group={groups.find((g) => g.id === liveDetail.groupId)}
+            myUid={uid}
+            onRate={setRating}
+            onRemove={(id) => { removeMutation.mutate(id); setDetail(null); }}
+            onClose={() => setDetail(null)}
           />
         </Suspense>
       )}
 
-      {/* Search opens on top of the tabs so they stay mounted (no remount / map reload on close) */}
-      {showSearch && (
+      {addQuery !== null && (
         <Suspense fallback={<div className="fixed inset-0 z-50 bg-background" />}>
-          <SearchOverlay activeGroupId={derivedGroupId} savedPlaces={savedPlacesQuery.data ?? []} groups={groupsQuery.data || []} onSave={() => setShowSearch(false)} onClose={() => setShowSearch(false)} />
+          <SearchOverlay
+            activeGroupId={groupId ?? null}
+            savedPlaces={savedPlaces.data ?? []}
+            groups={groups}
+            initialQuery={addQuery}
+            onSave={() => setAddQuery(null)}
+            onClose={() => setAddQuery(null)}
+          />
         </Suspense>
       )}
 
-      {/* Rate sheet */}
-      {ratingRestaurant && (
+      {rating && (
         <Suspense fallback={null}>
-          <RateSheet restaurant={ratingRestaurant} onClose={() => setRatingRestaurant(null)} />
+          <RateSheet restaurant={rating} onClose={() => setRating(null)} />
         </Suspense>
       )}
     </div>
@@ -447,6 +282,9 @@ const appQueryClient = new QueryClient({
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
 });
+
+// Bump when cached data shapes change so a new build never renders an old cache.
+const CACHE_VERSION = "2026-09-redesign";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -533,14 +371,11 @@ export default function App() {
   }, []);
 
   return (
-    <PersistQueryClientProvider client={appQueryClient} persistOptions={{ persister }}>
+    <PersistQueryClientProvider client={appQueryClient} persistOptions={{ persister, buster: CACHE_VERSION, maxAge: 1000 * 60 * 60 * 24 }}>
       {showSplash && <AnimatedSplash onComplete={() => setShowSplash(false)} />}
 
       {!loading && (
-        <div className={`h-full w-full origin-center 
-          transition-all ease-out duration-300
-          ${!showSplash ? "opacity-100 scale-100" : "opacity-0 scale-[0.98] pointer-events-none"} 
-        `}>
+        <div className={`h-full w-full transition-opacity duration-300 ${showSplash ? "pointer-events-none opacity-0" : "opacity-100"}`}>
           <Suspense fallback={<AppShellSkeleton />}>
             {isRecoveryMode ? (
               <UpdatePasswordScreen onComplete={() => {
@@ -548,7 +383,7 @@ export default function App() {
                 window.location.hash = ""; // Clear hash after success
               }} />
             ) : session ? (
-              <CraveApp sessionUid={session.user.id} />
+              <CraveApp key={session.user.id} uid={session.user.id} />
             ) : (
               <AuthScreen />
             )}

@@ -1,224 +1,148 @@
-import { useState, useEffect } from "react";
-import { Utensils, Plus, Users, ArrowRight, Camera } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Camera, ChevronLeft, Link2, Loader2, Plus } from "lucide-react";
 import { getCurrentUserId, supabase } from "../lib/supabase";
-import { C } from "../constants/theme";
+import { uploadAvatar } from "../lib/images";
+import { Glow, PrimaryButton, TextField } from "../components/ui";
 
-export function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
-  const [view, setView] = useState<"PROFILE" | "SELECT" | "CREATE" | "JOIN">("PROFILE");
-  const [newGroupName, setNewGroupName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [loading, setLoading] = useState(false);
+type View = "photo" | "choose" | "create" | "join";
+
+/** First run: add a photo, then create or join a first Cravelist. */
+export function OnboardingScreen({ onComplete }: { onComplete: (groupId?: string) => void }) {
+  const [view, setView] = useState<View>("photo");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const [profileUrl, setProfileUrl] = useState<string | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  useEffect(() => { getCurrentUserId().then(setUserId); }, []);
 
-  // Group Avatar Upload State
-  const [groupAvatarUrl, setGroupAvatarUrl] = useState<string | null>(null);
-  const [uploadingGroupAvatar, setUploadingGroupAvatar] = useState(false);
+  const go = (next: View) => { setView(next); setError(null); };
 
-  useEffect(() => {
-    getCurrentUserId().then(setUserId);
-  }, []);
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      if (!e.target.files || e.target.files.length === 0 || !userId) return;
-      setUploadingAvatar(true);
-      setError(null);
-      const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}-${Math.random()}.${fileExt}`;
-      const filePath = `public/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      
-      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', userId);
-      setProfileUrl(data.publicUrl);
-      
-      // Auto-advance after 1.2 seconds so they can see their beautiful face load in!
-      setTimeout(() => setView("SELECT"), 1200);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
-
-  const handleGroupAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      if (!e.target.files || e.target.files.length === 0 || !userId) return;
-      setUploadingGroupAvatar(true);
-      setError(null);
-      const file = e.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `group-${userId}-${Math.random()}.${fileExt}`;
-      const filePath = `groups/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      setGroupAvatarUrl(data.publicUrl);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setUploadingGroupAvatar(false);
-    }
-  };
-
-  const handleCreate = async () => {
-    if (newGroupName.length < 3) return setError("Name must be at least 3 characters.");
-    setLoading(true);
+  const onPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !userId) return;
+    setUploading(true);
     setError(null);
-    const { data: newGroupId, error: err } = await supabase.rpc("create_group", { group_name: newGroupName });
-    
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
+    try {
+      const url = await uploadAvatar(file, userId);
+      const { error: err } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", userId);
+      if (err) throw err;
+      setAvatarUrl(url);
+    } catch {
+      setError("Couldn't upload that photo. Try another, or skip for now.");
+    } finally {
+      setUploading(false);
     }
-
-    if (groupAvatarUrl && newGroupId) {
-      await supabase.from('groups').update({ avatar_url: groupAvatarUrl }).eq('id', newGroupId);
-    }
-
-    setLoading(false);
-    onComplete(); // Immediately pass them into the Main App Shell!
   };
 
-  const handleJoin = async () => {
-    if (joinCode.length < 6) return setError("Code must be at least 6 characters.");
-    setLoading(true);
+  const create = async () => {
+    setBusy(true);
     setError(null);
-    const { error: err } = await supabase.rpc("join_group", { invite_code: joinCode.toUpperCase() });
-    setLoading(false);
-    if (err) setError(err.message);
-    else onComplete();
+    const { data, error: err } = await supabase.rpc("create_group", { group_name: name.trim() });
+    setBusy(false);
+    if (err) return setError(err.message);
+    onComplete(data ?? undefined);
+  };
+
+  const join = async () => {
+    setBusy(true);
+    setError(null);
+    const { data, error: err } = await supabase.rpc("join_group", { invite_code: code });
+    setBusy(false);
+    if (err) return setError(err.message.includes("Invalid share code") ? "That code doesn't match a Cravelist." : err.message);
+    onComplete(data ?? undefined);
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-slate-50 relative animate-in fade-in duration-300">
-      <div className="flex-1 flex flex-col p-6 max-w-sm mx-auto w-full pt-20">
-        
-        {/* Core Header */}
-        <div className="mb-12">
-          <div className="w-14 h-14 rounded-[1.25rem] flex items-center justify-center mb-5 shadow-lg shadow-rose-200" style={{ background: C.rose }}>
-            <Utensils size={28} className="text-white" />
+    <div className="relative flex min-h-full flex-col overflow-hidden bg-background">
+      <Glow side="right" />
+      <div className="relative mx-auto flex w-full max-w-sm flex-1 flex-col px-6 pt-safe pb-safe">
+        {(view === "create" || view === "join") && (
+          <button type="button" onClick={() => go("choose")} aria-label="Back"
+            className="-ml-3 mt-2 flex h-11 w-11 items-center justify-center rounded-full">
+            <ChevronLeft size={24} />
+          </button>
+        )}
+
+        <div className={`${view === "create" || view === "join" ? "mt-4" : "mt-16"} mb-10`}>
+          <div className="mb-3 font-mono text-xs tracking-[0.14em] text-muted uppercase">
+            {view === "photo" ? "Step 1 of 2" : "Step 2 of 2"}
           </div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-tight mb-2">
-            Welcome to <br/>Crave.
+          <h1 className="m-0 mb-3 font-display text-[44px] leading-none font-extrabold tracking-[-0.03em]">
+            {view === "photo" ? <>Welcome to<br />Crave.</>
+              : view === "create" ? "Name your Cravelist"
+              : view === "join" ? "Join a Cravelist"
+              : <>Your first<br />Cravelist</>}
           </h1>
-          {view === "PROFILE" ? (
-             <p className="text-base text-slate-500 font-medium">Add a profile picture so your friends can recognize you.</p>
-          ) : (
-             <p className="text-base text-slate-500 font-medium">Before we start saving spots, let's set up your first Cravelist.</p>
-          )}
+          <p className="m-0 text-[15px] text-muted">
+            {view === "photo" ? "Add a photo so your crew knows who rated what."
+              : view === "create" ? "You can invite people once it's made."
+              : view === "join" ? "Enter the 6-character code a friend shared with you."
+              : "A shared list of places you want to try — for you, a partner or a whole group."}
+          </p>
         </div>
 
-        {view === "PROFILE" && (
-          <div className="flex flex-col items-center animate-in slide-in-from-bottom-4 duration-300">
-            {error && <p className="text-rose-500 text-sm font-bold text-center px-2 mb-4">{error}</p>}
-            <label className="w-36 h-36 rounded-full mb-8 bg-white border-4 border-white flex items-center justify-center cursor-pointer overflow-hidden shadow-xl shadow-rose-200/50 relative group transition-all active:scale-95">
-              {uploadingAvatar ? (
-                <div className="animate-spin w-10 h-10 border-4 border-rose-500 border-t-transparent rounded-full" />
-              ) : profileUrl ? (
-                <img src={profileUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex flex-col items-center gap-2 text-rose-300">
-                   <Camera size={32} strokeWidth={2.5} />
-                   <span className="text-[10px] font-black tracking-wider uppercase">Upload Image</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploadingAvatar} />
+        {view === "photo" && (
+          <div className="flex flex-col items-center gap-8 animate-rise">
+            <label className="relative flex h-36 w-36 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border-strong bg-surface">
+              {uploading ? <Loader2 size={28} className="animate-spin text-accent" />
+                : avatarUrl ? <img src={avatarUrl} alt="Your photo" className="h-full w-full object-cover" />
+                : <span className="flex flex-col items-center gap-1.5 text-muted"><Camera size={28} /><span className="text-xs font-medium">Add photo</span></span>}
+              <input type="file" accept="image/*" onChange={onPhoto} className="sr-only" disabled={uploading || !userId} />
             </label>
+            {error && <p role="alert" className="m-0 text-center text-sm text-danger">{error}</p>}
+            <PrimaryButton onClick={() => go("choose")} disabled={uploading}>
+              {avatarUrl ? "Continue" : "Skip for now"} <ArrowRight size={18} />
+            </PrimaryButton>
+          </div>
+        )}
 
-            <button onClick={() => setView("SELECT")}
-              className="w-full py-4 rounded-2xl font-black text-rose-600 bg-rose-50 border border-rose-100 transition-all active:scale-95 text-[15px]">
-              {profileUrl ? "Looks good! Continue" : "Skip for now"}
+        {view === "choose" && (
+          <div className="flex flex-col gap-3 animate-rise">
+            <button type="button" onClick={() => go("create")}
+              className="flex items-center gap-4 rounded-3xl bg-ink p-5 text-left text-white active:scale-[0.98]">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent"><Plus size={22} /></span>
+              <span className="flex flex-col">
+                <span className="text-lg font-semibold">Start a new list</span>
+                <span className="text-[13px] text-border-strong">For you, a partner or friends</span>
+              </span>
+            </button>
+            <button type="button" onClick={() => go("join")}
+              className="flex items-center gap-4 rounded-3xl border border-dashed border-border-strong bg-surface p-5 text-left active:scale-[0.98]">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-subtle"><Link2 size={22} /></span>
+              <span className="flex flex-col">
+                <span className="text-lg font-semibold">Join with a code</span>
+                <span className="text-[13px] text-muted">Someone shared a Cravelist with you</span>
+              </span>
             </button>
           </div>
         )}
 
-        {view === "SELECT" && (
-          <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-            <button onClick={() => setView("CREATE")} className="w-full bg-white border border-slate-200 p-5 rounded-3xl flex items-center gap-4 active:scale-[0.98] transition-all shadow-sm">
-              <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex flex-shrink-0 items-center justify-center">
-                <Plus size={24} />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-black text-slate-800 text-lg">Create New</h3>
-                <p className="text-[13px] font-medium text-slate-500 mt-0.5">Start a fresh list for yourself or your friends.</p>
-              </div>
-            </button>
-
-            <button onClick={() => setView("JOIN")} className="w-full bg-white border border-slate-200 p-5 rounded-3xl flex items-center gap-4 active:scale-[0.98] transition-all shadow-sm">
-              <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex flex-shrink-0 items-center justify-center">
-                <Users size={24} />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-black text-slate-800 text-lg">Join Existing</h3>
-                <p className="text-[13px] font-medium text-slate-500 mt-0.5">Have an invite code? Join a friend's list.</p>
-              </div>
-            </button>
-          </div>
+        {view === "create" && (
+          <form className="flex flex-col gap-4 animate-rise" onSubmit={(e) => { e.preventDefault(); if (name.trim()) create(); }}>
+            <TextField label="List name" placeholder="Weekend Crew, Date Spots…" value={name} maxLength={60} autoFocus
+              onChange={(e) => setName(e.target.value)} />
+            {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+            <PrimaryButton type="submit" disabled={busy || !name.trim()} tone="accent">
+              {busy ? <Loader2 size={18} className="animate-spin" /> : null} Create list
+            </PrimaryButton>
+          </form>
         )}
 
-        {view === "CREATE" && (
-          <div className="space-y-4 animate-in slide-in-from-right-4 duration-300 flex flex-col items-center">
-            
-            <label className="w-24 h-24 rounded-2xl mb-2 bg-white border-2 border-slate-200 border-dashed flex items-center justify-center cursor-pointer overflow-hidden shadow-sm relative group transition-all active:scale-95">
-              {uploadingGroupAvatar ? (
-                <div className="animate-spin w-6 h-6 border-4 border-rose-500 border-t-transparent rounded-full" />
-              ) : groupAvatarUrl ? (
-                <img src={groupAvatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex flex-col items-center gap-1 text-slate-400">
-                   <Camera size={24} strokeWidth={2} />
-                   <span className="text-[9px] font-black tracking-wider uppercase">Add Logo</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" onChange={handleGroupAvatarUpload} className="hidden" disabled={uploadingGroupAvatar} />
-            </label>
-
-            <div className="space-y-2 w-full">
-              <label className="text-sm font-bold text-slate-700 ml-1">Name your Cravelist</label>
-              <input type="text" placeholder="e.g. NYC Hitlist, Date Spots..." value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)}
-                className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 text-slate-800 font-bold placeholder:text-slate-400 placeholder:font-medium outline-none focus:border-rose-400 transition-all text-lg text-center" />
-            </div>
-            {error && <p className="text-rose-500 text-sm font-bold text-center px-2">{error}</p>}
-            
-            <button onClick={handleCreate} disabled={loading || !newGroupName}
-              className="w-full py-4 rounded-2xl font-black text-white text-[15px] disabled:opacity-40 transition-all shadow-lg flex items-center justify-center gap-2"
-              style={{ background: C.rose, boxShadow: `0 10px 25px -5px ${C.rose}60` }}>
-              {loading ? "Creating..." : "Create List"} <ArrowRight size={18} />
-            </button>
-            <button onClick={() => { setView("SELECT"); setError(null); }} className="w-full py-3 text-slate-400 font-bold text-sm">Back</button>
-          </div>
+        {view === "join" && (
+          <form className="flex flex-col gap-4 animate-rise" onSubmit={(e) => { e.preventDefault(); if (code.length === 6) join(); }}>
+            <TextField label="Invite code" placeholder="ABC123" value={code} autoFocus autoCapitalize="characters" autoComplete="off"
+              onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} />
+            {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
+            <PrimaryButton type="submit" disabled={busy || code.length !== 6} tone="accent">
+              {busy ? <Loader2 size={18} className="animate-spin" /> : null} Join list
+            </PrimaryButton>
+          </form>
         )}
-
-        {view === "JOIN" && (
-          <div className="space-y-5 animate-in slide-in-from-right-4 duration-300">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 ml-1">Enter Invite Code</label>
-              <input type="text" placeholder="SIX-DIGIT-CODE" value={joinCode} onChange={(e) => setJoinCode(e.target.value)}
-                className="w-full bg-white border-2 border-slate-200 rounded-2xl px-5 py-4 text-slate-800 font-black uppercase tracking-widest placeholder:text-slate-300 placeholder:font-medium outline-none focus:border-rose-400 transition-all text-lg text-center" />
-            </div>
-            {error && <p className="text-rose-500 text-sm font-bold text-center px-2">{error}</p>}
-            
-            <button onClick={handleJoin} disabled={loading || !joinCode}
-              className="w-full py-4 rounded-2xl font-black text-white text-[15px] disabled:opacity-40 transition-all shadow-lg flex items-center justify-center gap-2"
-              style={{ background: C.rose, boxShadow: `0 10px 25px -5px ${C.rose}60` }}>
-              {loading ? "Joining..." : "Join List"} <ArrowRight size={18} />
-            </button>
-            <button onClick={() => { setView("SELECT"); setError(null); }} className="w-full py-3 text-slate-400 font-bold text-sm">Back</button>
-          </div>
-        )}
-
       </div>
     </div>
   );

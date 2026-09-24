@@ -8,6 +8,9 @@ type FeedRow = {
   group_id: string;
   name: string;
   address: string;
+  city: string | null;
+  area: string | null;
+  country_code: string | null;
   latitude: number;
   longitude: number;
   rating: number | null;
@@ -30,6 +33,14 @@ type FeedRow = {
   rated_count: number;
 };
 
+/** Fallback for places saved before location columns existed: "1 Main St, Brooklyn, NY 11211, USA" -> "Brooklyn". */
+function areaFromAddress(address: string): string | null {
+  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 3) return parts.length === 2 ? parts[0] : null;
+  const region = parts[parts.length - 2];
+  return /\d/.test(region) ? parts[parts.length - 3] : region;
+}
+
 function toRestaurant(row: FeedRow, uid: string): Restaurant {
   const reviews = row.reviews ?? [];
   const myReview = reviews.find((rev) => rev.user_id === uid);
@@ -46,6 +57,9 @@ function toRestaurant(row: FeedRow, uid: string): Restaurant {
     groupId: row.group_id,
     name: row.name,
     address: row.address,
+    city: row.city,
+    area: row.area ?? areaFromAddress(row.address),
+    countryCode: row.country_code,
     latitude: row.latitude,
     longitude: row.longitude,
     rating: row.rating,
@@ -86,6 +100,7 @@ export type FetchRestaurantsOptions = {
   filterCategory?: string | null;
   filterVibes?: string[];
   sortBy?: SortOption;
+  search?: string;
   restaurantId?: number;
   /** Fetch the whole list (up to 1000) in one page, e.g. for the map. */
   all?: boolean;
@@ -93,7 +108,7 @@ export type FetchRestaurantsOptions = {
 
 /** A page of a Cravelist, fully assembled by the database in a single call. */
 export async function fetchRestaurants({
-  uid, groupId, pageParam, filterTab, filterCategory, filterVibes, sortBy, restaurantId, all,
+  uid, groupId, pageParam, filterTab, filterCategory, filterVibes, sortBy, search, restaurantId, all,
 }: FetchRestaurantsOptions): Promise<{ restaurants: Restaurant[]; nextCursor: string | null }> {
   if (!uid || !groupId) return { restaurants: [], nextCursor: null };
 
@@ -109,6 +124,7 @@ export async function fetchRestaurants({
     p_limit: pageSize,
     p_offset: offset,
     p_restaurant_id: restaurantId,
+    p_search: search?.trim() || undefined,
   });
   if (error) throw error;
 
