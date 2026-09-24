@@ -1,8 +1,9 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Group, Restaurant } from "../types";
 import { fetchRestaurants } from "../lib/restaurants";
+import { backfillLocations } from "../lib/places";
 import { Eyebrow, PageTitle, Sheet } from "../components/ui";
 
 // Mapbox (~1.8 MB) loads only when the full map is opened.
@@ -14,6 +15,9 @@ const STAMP_TONES = [
   { border: "border-[#3b82f6]", text: "text-sky-ink" },
 ];
 const STAMP_TILT = [-3, 2, -1, 3, -2];
+
+// Lists whose missing locations were already requested this session.
+const backfillRequested = new Set<string>();
 
 function lastVisit(r: Restaurant) {
   const dates = r.reviews.map((rev) => rev.created_at);
@@ -33,6 +37,24 @@ export function PassportTab({ uid, group, onOpen }: {
     queryFn: async () => (await fetchRestaurants({ uid, groupId: group!.id, all: true })).restaurants,
     enabled: !!group,
   });
+
+  // Places saved before city/country were stored count as 0 Cities/Countries.
+  // Fill them in once, in the background, then refresh the counts.
+  const queryClient = useQueryClient();
+  const groupId = group?.id;
+  const missingLocations = (places.data ?? []).some((r) => !r.countryCode);
+  useEffect(() => {
+    if (!groupId || !missingLocations || backfillRequested.has(groupId)) return;
+    backfillRequested.add(groupId);
+    backfillLocations()
+      .then(({ updated }) => {
+        if (updated > 0) {
+          queryClient.invalidateQueries({ queryKey: ["groups"] });
+          queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+        }
+      })
+      .catch((err) => console.warn("Location backfill failed:", err));
+  }, [groupId, missingLocations, queryClient]);
 
   const stamps = useMemo(
     () => (places.data ?? []).filter((r) => r.visited).sort((a, b) => lastVisit(b).localeCompare(lastVisit(a))),

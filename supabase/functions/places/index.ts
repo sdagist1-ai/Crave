@@ -10,7 +10,8 @@
 // POST { action: "details", placeId }           -> { openingHours, photoName }
 // POST { action: "photo", photoName, placeId }  -> { url }  (cached in Storage)
 // POST { action: "backfill_locations" }         -> { updated, remaining }
-//      Service role only: fills city/area/country_code for saved places.
+//      Fills city/area/country_code for places saved before those columns
+//      existed. Runs as the caller, so RLS limits it to their own lists.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const GOOGLE_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
@@ -59,18 +60,6 @@ function locationOf(p: GooglePlace) {
   const area = find("neighborhood", "sublocality_level_1", "sublocality")?.longText ?? city;
   const countryCode = find("country")?.shortText ?? null;
   return { city, area, countryCode };
-}
-
-function isServiceRole(req: Request) {
-  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (token && token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) return true;
-  try {
-    // The gateway has already verified the JWT signature (verify_jwt = true).
-    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-    return payload.role === "service_role";
-  } catch {
-    return false;
-  }
 }
 
 function json(body: unknown, status = 200) {
@@ -147,16 +136,20 @@ async function details(placeId: unknown) {
   });
 }
 
-async function backfillLocations() {
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: rows, error } = await admin
+async function backfillLocations(req: Request) {
+  // The caller's client: RLS limits reads and updates to lists they belong to.
+  const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    auth: { persistSession: false },
+  });
+  const { data: rows, error } = await db
     .from("restaurants")
     .select("place_id")
     .is("country_code", null)
     .limit(1000);
   if (error) return json({ error: error.message }, 500);
 
-  const placeIds = [...new Set((rows ?? []).map((r) => r.place_id))].slice(0, 60);
+  const placeIds = [...new Set((rows ?? []).map((r) => r.place_id))].slice(0, 40);
   let updated = 0;
   for (const placeId of placeIds) {
     if (!PLACE_ID_RE.test(placeId)) continue;
@@ -168,14 +161,14 @@ async function backfillLocations() {
       continue;
     }
     const { city, area, countryCode } = locationOf(await res.json() as GooglePlace);
-    const { error: updateError } = await admin
+    const { error: updateError } = await db
       .from("restaurants")
       .update({ city, area, country_code: countryCode })
       .eq("place_id", placeId);
     if (!updateError) updated++;
   }
 
-  const { count } = await admin
+  const { count } = await db
     .from("restaurants")
     .select("id", { count: "exact", head: true })
     .is("country_code", null);
@@ -226,8 +219,7 @@ Deno.serve(async (req) => {
       case "search": return await search(payload.query, payload.lat, payload.lng);
       case "details": return await details(payload.placeId);
       case "photo": return await photo(payload.photoName, payload.placeId);
-      case "backfill_locations":
-        return isServiceRole(req) ? await backfillLocations() : json({ error: "forbidden" }, 403);
+      case "backfill_locations": return await backfillLocations(req);
       default: return json({ error: "unknown_action" }, 400);
     }
   } catch (err) {

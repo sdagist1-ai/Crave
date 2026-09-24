@@ -100,3 +100,11 @@ export async function syncRestaurantData(placeId: string, supabaseId: number) {
     return false;
   }
 }
+
+/**
+ * Fill in city / area / country for the caller's places saved before those
+ * columns existed (up to 40 per call; RLS limits it to their own lists).
+ */
+export async function backfillLocations() {
+  return callPlaces<{ updated: number; remaining: number | null }>({ action: "backfill_locations" });
+}

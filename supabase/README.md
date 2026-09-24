@@ -48,10 +48,10 @@ npx supabase gen types typescript --project-id kqdsgmiutfsxsjgubget > src/types/
 `GOOGLE_PLACES_API_KEY` secret: `search`, `details`, `photo` (copies a photo into
 the `place_photos` bucket) and `backfill_locations`.
 
-`backfill_locations` fills `city` / `area` / `country_code` for saved places
-(60 places per call). It only runs for the service role: in the dashboard open
-Edge Functions → places → Test, choose the **service role** key, send
-`{"action": "backfill_locations"}` and repeat until `remaining` is 0.
+`backfill_locations` fills `city` / `area` / `country_code` for places saved
+before those columns existed (40 per call). It runs as the caller, so RLS limits
+it to their own lists; the app calls it automatically from Passport when a
+list has places without a location.
 
 ## Backup
 
