@@ -21,8 +21,20 @@ const PLACES = "https://places.googleapis.com/v1";
 // every keystroke-search at the Enterprise rate; they're fetched once, with the
 // place's details, when someone picks a result.
 const SEARCH_FIELDS = [
-  "id", "displayName", "formattedAddress", "location", "primaryType", "photos", "addressComponents",
+  "id", "displayName", "formattedAddress", "location", "primaryType", "types", "photos", "addressComponents",
 ].map((f) => `places.${f}`).join(",");
+
+// Search is for places to eat and drink: drop shops, parks, offices and the like.
+// Google tags these with a food & drink type (restaurant, cafe, bar, bakery…) or
+// a specific cuisine ending in "_restaurant".
+const FOOD_TYPES = new Set([
+  "restaurant", "food", "cafe", "coffee_shop", "tea_house", "bar", "pub", "wine_bar", "bar_and_grill",
+  "bakery", "bagel_shop", "donut_shop", "dessert_shop", "ice_cream_shop", "juice_shop", "acai_shop",
+  "chocolate_shop", "confectionery", "candy_store", "cafeteria", "deli", "diner", "food_court",
+  "meal_takeaway", "meal_delivery", "brewery", "winery", "brewpub", "beer_hall", "cat_cafe", "dog_cafe",
+]);
+const isFoodPlace = (p: GooglePlace) =>
+  [p.primaryType, ...(p.types ?? [])].some((t) => !!t && (FOOD_TYPES.has(t) || t.endsWith("_restaurant")));
 
 // Opening hours already make Details an Enterprise request, so rating and price come free with it.
 const DETAILS_FIELDS = "regularOpeningHours,photos,addressComponents,rating,userRatingCount,priceLevel";
@@ -45,6 +57,7 @@ type GooglePlace = {
   userRatingCount?: number;
   priceLevel?: string;
   primaryType?: string;
+  types?: string[];
   photos?: { name: string }[];
   currentOpeningHours?: { openNow?: boolean };
   regularOpeningHours?: { weekdayDescriptions?: string[] };
@@ -97,7 +110,8 @@ async function search(query: unknown, lat: unknown, lng: unknown) {
     return json({ error: "invalid_query" }, 400);
   }
 
-  const body: Record<string, unknown> = { textQuery: query.trim(), pageSize: 15 };
+  // Ask for a few extra, since non-food places are filtered out below.
+  const body: Record<string, unknown> = { textQuery: query.trim(), pageSize: 20 };
   if (typeof lat === "number" && typeof lng === "number" && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
     body.locationBias = { circle: { center: { latitude: lat, longitude: lng }, radius: 30000 } };
   }
@@ -117,7 +131,7 @@ async function search(query: unknown, lat: unknown, lng: unknown) {
   }
 
   const data = await res.json() as { places?: GooglePlace[] };
-  return json({ places: (data.places ?? []).map(toPlaceResult) });
+  return json({ places: (data.places ?? []).filter(isFoodPlace).slice(0, 15).map(toPlaceResult) });
 }
 
 async function details(placeId: unknown) {
