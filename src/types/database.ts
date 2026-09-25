@@ -264,7 +264,10 @@ export type Database = {
       }
       get_my_groups: { Args: never; Returns: Json[] }
       get_my_stats: { Args: never; Returns: Json }
+      // Returns json in SQL (so a wrong code can reply 400 without rolling back the
+      // attempt); on success that JSON is the group id string.
       join_group: { Args: { invite_code: string }; Returns: string }
+      reset_share_code: { Args: { p_group_id: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

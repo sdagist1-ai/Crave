@@ -321,8 +321,12 @@ function CodeSheet({ title, label, placeholder, cta, busy, error, onClose, onSub
 }
 
 function InviteSheet({ group, onClose }: { group: Group; onClose: () => void }) {
+  const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
-  const code = group.share_code ?? "";
+  const [code, setCode] = useState(group.share_code ?? "");
+  // Reset takes two taps: the old code stops working for anyone who hasn't joined yet.
+  const [resetStep, setResetStep] = useState<"idle" | "confirm" | "busy">("idle");
+  const [resetError, setResetError] = useState<string | null>(null);
   const message = `Join "${group.name}" on Crave — open the app, tap Profile → Join with code, and enter ${code}`;
 
   const copy = async () => {
@@ -339,6 +343,19 @@ function InviteSheet({ group, onClose }: { group: Group; onClose: () => void }) 
       copy();
     }
   };
+  const reset = async () => {
+    setResetStep("busy");
+    setResetError(null);
+    const { data, error } = await supabase.rpc("reset_share_code", { p_group_id: group.id });
+    if (error || typeof data !== "string") {
+      setResetError("Couldn't reset the code. Try again.");
+      setResetStep("idle");
+      return;
+    }
+    setCode(data);
+    setResetStep("idle");
+    queryClient.invalidateQueries({ queryKey: ["groups"] });
+  };
 
   return (
     <Sheet title={`Invite to ${group.name}`} onClose={onClose}>
@@ -354,6 +371,26 @@ function InviteSheet({ group, onClose }: { group: Group; onClose: () => void }) 
         <PrimaryButton onClick={share}><Share2 size={18} /> Share invite</PrimaryButton>
       </div>
       <p role="status" className="m-0 h-5 text-center text-xs text-mint-ink">{copied ? "Code copied" : ""}</p>
+      <div className="mt-2 flex min-h-11 items-center justify-center gap-3 text-sm">
+        {resetStep === "idle" && (
+          <button type="button" onClick={() => setResetStep("confirm")} className="h-11 text-muted">
+            Reset code
+          </button>
+        )}
+        {resetStep !== "idle" && (
+          <>
+            <span className="text-muted">The old code will stop working.</span>
+            <button type="button" onClick={reset} disabled={resetStep === "busy"}
+              className="h-11 font-semibold text-accent-ink">
+              {resetStep === "busy" ? <Loader2 size={16} className="animate-spin" /> : "Reset"}
+            </button>
+            <button type="button" onClick={() => setResetStep("idle")} disabled={resetStep === "busy"} className="h-11 text-muted">
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+      {resetError && <p role="alert" className="m-0 text-center text-sm text-danger">{resetError}</p>}
     </Sheet>
   );
 }

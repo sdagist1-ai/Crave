@@ -45,6 +45,9 @@ export function AuthScreen({ notice }: { notice?: string | null }) {
         if (!firstName || !lastName) {
           throw new Error("Please enter your first and last name");
         }
+        if (password.length < 8) {
+          throw new Error("Use a password with at least 8 characters.");
+        }
         const { error: err } = await supabase.auth.signUp({ 
           email, 
           password, 
