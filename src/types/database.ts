@@ -101,6 +101,48 @@ export type Database = {
         }
         Relationships: []
       }
+      app_updates: {
+        Row: {
+          id: number
+          version: string
+          min_build: number
+          zip_url: string
+          checksum: string | null
+          notes: string | null
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          version: string
+          min_build: number
+          zip_url: string
+          checksum?: string | null
+          notes?: string | null
+          is_active?: boolean
+        }
+        Update: {
+          is_active?: boolean
+          notes?: string | null
+        }
+        Relationships: []
+      }
+      ota_crash_logs: {
+        Row: {
+          id: number
+          version: string
+          build: number | null
+          error_message: string
+          user_id: string | null
+          created_at: string
+        }
+        Insert: {
+          version: string
+          build?: number | null
+          error_message: string
+        }
+        Update: never
+        Relationships: []
+      }
       cuisine_catalog: {
         Row: {
           label: string

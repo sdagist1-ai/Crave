@@ -8,6 +8,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabase";
 import { DEFAULT_FEED, feedQuery, fetchRestaurants } from "./lib/restaurants";
+import { startLiveUpdates } from "./lib/liveUpdate";
 import { fetchMyGroups } from "./lib/groups";
 import { parseShareLink, receiveShare, useIncomingShare, type SharedPlace } from "./lib/shareInbox";
 import { publishForShareExtension, SHARED_KEYS } from "./lib/sharedStore";
@@ -420,6 +421,9 @@ const persister = createSyncStoragePersister({
 const CACHE_VERSION = "2026-09-cuisines";
 
 export default function App() {
+  // The app rendered: confirm this code works (so a live update isn't rolled back),
+  // then look for a newer one.
+  useEffect(() => { startLiveUpdates(); }, []);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
