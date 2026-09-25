@@ -39,9 +39,18 @@ final class ShareViewController: UIViewController {
         var link: String?
         var texts: [String] = []
 
+        var card: VCardPlace?
+
         for item in extensionContext?.inputItems as? [NSExtensionItem] ?? [] {
             if let text = item.attributedContentText?.string, !text.isEmpty { texts.append(text) }
             for provider in item.attachments ?? [] {
+                // Apple Maps shares the place as a contact card (plus a short maps.apple link).
+                if card == nil, provider.hasItemConformingToTypeIdentifier(UTType.vCard.identifier),
+                   let loaded = try? await provider.loadItem(forTypeIdentifier: UTType.vCard.identifier) {
+                    var data = loaded as? Data
+                    if data == nil, let file = loaded as? URL { data = try? Data(contentsOf: file) }
+                    if let data, let text = String(data: data, encoding: .utf8) { card = VCardPlace(text) }
+                }
                 if link == nil, provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
                    let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL,
                    !url.isFileURL {
@@ -51,6 +60,12 @@ final class ShareViewController: UIViewController {
                     texts.append(text)
                 }
             }
+        }
+
+        // The card's "Name\nAddress" goes first: the server reads the name from the first line.
+        if let card, let name = card.name {
+            texts.insert([name, card.address].compactMap { $0 }.joined(separator: "\n"), at: 0)
+            if link == nil { link = card.mapsLink }
         }
 
         let text = String(texts.joined(separator: "\n").prefix(2000))

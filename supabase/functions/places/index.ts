@@ -223,8 +223,11 @@ async function resolveShare(rawUrl: unknown, rawText: unknown) {
     let url: URL | null = link ? new URL(link) : null;
     if (url && !MAP_HOST.test(url.hostname)) url = null;
 
-    // maps.app.goo.gl/… redirects to the full google.com/maps/place/… URL.
-    for (let hops = 0; url && /goo\.gl$/i.test(url.hostname) && hops < 5; hops++) {
+    // Short links redirect to the full URL: maps.app.goo.gl/… → google.com/maps/place/…,
+    // maps.apple/p/… → maps.apple.com/place?name=…&coordinate=…
+    const isShortLink = (u: URL) => /goo\.gl$/i.test(u.hostname) || /^maps\.apple$/i.test(u.hostname) ||
+      (/^maps\.apple\.com$/i.test(u.hostname) && u.pathname.startsWith("/p/"));
+    for (let hops = 0; url && isShortLink(url) && hops < 5; hops++) {
       const res = await fetch(url, { redirect: "manual" });
       await res.body?.cancel();
       const next = res.headers.get("location");
@@ -251,7 +254,13 @@ async function resolveShare(rawUrl: unknown, rawText: unknown) {
     console.warn("resolve_share: couldn't read link", err);
   }
 
-  if (!name) return json({ error: "no_place" }, 422);
+  if (!name) {
+    // Which kind of link couldn't be read (no query string or text: nothing personal).
+    let shape = "none";
+    try { if (link) { const u = new URL(link); shape = u.hostname + u.pathname.slice(0, 20); } } catch { shape = "unparseable"; }
+    console.warn("resolve_share: no place in share", { shape, hasText: text.length > 0 });
+    return json({ error: "no_place" }, 422);
+  }
   // "Lucali, 575 Henry St, Brooklyn" style names already carry the street.
   const street = address && !name.includes(",") ? address.split(",")[0] : "";
   const query = [name, street].filter(Boolean).join(" ").slice(0, 120);
