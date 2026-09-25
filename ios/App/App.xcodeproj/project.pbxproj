@@ -23,6 +23,7 @@
 		CB0B04E6F6583F0B1A959730 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B1C87210B5832C8D82D671 /* MainViewController.swift */; };
 		ED2184138CA75BE172F9D368 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED1149B20BAA0741A2D4B3B2 /* SharedStore.swift */; };
 		EE78AB98A29C9BD777582317 /* CraveAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00889194FCE56CDD63AE23E /* CraveAPI.swift */; };
+		F812BFE439D2EA8216832DF7 /* VCardPlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8B6CE97F723384D2C6FC99 /* VCardPlace.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +71,7 @@
 		B510EB5D691C09AFDA246369 /* ShareView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		BD775D6E693D7BEE8B35366C /* CraveShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CraveShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE23691F28EF533BF451666C /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		DC8B6CE97F723384D2C6FC99 /* VCardPlace.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VCardPlace.swift; sourceTree = "<group>"; };
 		ED1149B20BAA0741A2D4B3B2 /* SharedStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -139,6 +141,7 @@
 				95D9A95B03B2395435B5614B /* ShareModel.swift */,
 				B510EB5D691C09AFDA246369 /* ShareView.swift */,
 				A0F4FDB0AA3AAE0558DB4353 /* CraveShare.entitlements */,
+				DC8B6CE97F723384D2C6FC99 /* VCardPlace.swift */,
 			);
 			name = CraveShare;
 			path = CraveShare;
@@ -281,6 +284,7 @@
 				EE78AB98A29C9BD777582317 /* CraveAPI.swift in Sources */,
 				2C2DE46F3162A320D19C8935 /* ShareModel.swift in Sources */,
 				C61DB05370DBF7E7D69CEC6B /* ShareView.swift in Sources */,
+				F812BFE439D2EA8216832DF7 /* VCardPlace.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
