@@ -1,7 +1,7 @@
 import { Star, UtensilsCrossed } from "lucide-react";
 import type { Restaurant } from "../types";
 import { formatPriceLevel, placeSubtitle } from "../utils/helpers";
-import { Avatar, AvatarStack, ScoreCircle, Tag, VibeTag } from "./ui";
+import { Avatar, AvatarStack, ScoreCircle, OccasionTag, Tag } from "./ui";
 import { displayName } from "../utils/people";
 
 export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
@@ -41,9 +41,9 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
             )}
           </span>
         )}
-        {(r.vibes.length > 0 || price) && (
+        {(r.occasions.length > 0 || price) && (
           <span className="flex flex-wrap gap-1.5">
-            {r.vibes.map((v) => <VibeTag key={v} vibe={v} />)}
+            {r.occasions.slice(0, 2).map((o) => <OccasionTag key={o} occasion={o} />)}
             {price && <Tag>{price}</Tag>}
           </span>
         )}

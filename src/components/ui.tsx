@@ -94,9 +94,12 @@ export function ScoreCircle({ avgScore, size = 52 }: { avgScore: number | null; 
 
 // ─── Tags & chips ───────────────────────────────────────────────────────────
 
-const VIBE_TONES: Record<string, string> = {
-  Casual: "bg-sky-soft text-sky-ink",
-  Elegant: "bg-violet-soft text-violet-ink",
+const OCCASION_TONES: Record<string, string> = {
+  "Date night": "bg-violet-soft text-violet-ink",
+  Brunch: "bg-sun-soft text-sun-ink",
+  Coffee: "bg-sky-soft text-sky-ink",
+  Drinks: "bg-accent-tint text-accent-ink",
+  Sweets: "bg-mint-soft text-mint-ink",
 };
 
 export function Tag({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "mint" | "sun" | string }) {
@@ -108,8 +111,8 @@ export function Tag({ children, tone = "neutral" }: { children: ReactNode; tone?
   return <span className={`inline-flex items-center rounded-full px-2 py-[3px] text-[11px] leading-none ${cls}`}>{children}</span>;
 }
 
-export function VibeTag({ vibe }: { vibe: string }) {
-  return <Tag tone={VIBE_TONES[vibe] ?? "bg-subtle text-ink-2"}>{vibe}</Tag>;
+export function OccasionTag({ occasion }: { occasion: string }) {
+  return <Tag tone={OCCASION_TONES[occasion] ?? "bg-subtle text-ink-2"}>{occasion}</Tag>;
 }
 
 export function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {

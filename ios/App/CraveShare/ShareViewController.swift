@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// Appears as "Crave" in the share sheet. When someone shares a place from Apple
 /// Maps or Google Maps, it shows a small "Add to Crave" sheet over Maps: it finds
-/// the restaurant, lets them pick a list and a vibe, and saves it without leaving
+/// the restaurant, lets them pick a list (and what it's good for), and saves it without leaving
 /// Maps. "Open in Crave" hands the share to the app instead:
 ///   craveapp://share?url=<link>&text=<shared text>
 final class ShareViewController: UIViewController {

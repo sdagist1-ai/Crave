@@ -10,6 +10,11 @@ Ideas we've agreed are worth doing, roughly in order. Not scheduled yet.
 - Expected: cost per active user drops from ~$0.48/mo to ~$0.05–0.08/mo.
 - Needs: a Maps ID + private key from the Apple Developer account; the `places`
   function gets an Apple search step. The Maps share sheet already skips search.
+- Cuisines and occasions keep working: they're worked out in the database from a list of
+  type words plus the name, and the one Google Details call at save time already returns
+  Google's `types`. Apple's categories are coarser (Restaurant, Cafe, Bakery, Nightlife…,
+  no cuisines), so map them to the same words for anything saved without Google
+  (Cafe → `cafe`, Bakery → `bakery`, Nightlife/Brewery/Winery → `bar`).
 
 Current estimate (Google Places + Supabase Pro $25/mo), before this change:
 
@@ -91,6 +96,17 @@ generic AI recommendations.
 
 ## Growth
 
+- **Starter lists + Restaurant Week campaign** (build in December, ready for NYC's winter
+  Restaurant Week, usually late January–February; confirm dates when announced).
+  - **Starter lists:** a curated list anyone can copy into their Cravelist from a link
+    (`cravelist.us/list/…`, reusing the invite-link setup). Reusable for any campaign:
+    "Restaurant Week picks", "Best pizza in Brooklyn", a creator's favourites.
+  - **Spin only Restaurant Week spots**, and a special Passport stamp for places tried
+    during the week.
+  - **Content:** "We let Crave pick our Restaurant Week dinners", "5 spots in 5 nights",
+    posted 2–3 weeks before it starts, when people plan and book.
+  - "NYC Restaurant Week" is a trademark of NYC Tourism + Conventions: say "Restaurant Week
+    picks", no logo, no implied affiliation (or ask them about a partnership).
 - **Ask for an App Store rating at a happy moment** (after rating a place 9+).
 
 ## Smaller ideas

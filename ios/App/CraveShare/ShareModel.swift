@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 /// Drives the share sheet: works out which restaurant was shared, lets the user
-/// pick a list and vibe, and saves it — all without leaving Maps.
+/// pick a list (and what it's good for), and saves it — all without leaving Maps.
 @MainActor
 final class ShareModel: ObservableObject {
     enum Phase: Equatable {
@@ -15,14 +15,14 @@ final class ShareModel: ObservableObject {
         case failed(String)
     }
 
-    static let vibeOptions = ["Casual", "Elegant"]
+    static let occasionOptions = ["Date night", "Brunch", "Drinks"]
 
     @Published private(set) var phase: Phase = .loading("Finding the spot you shared…")
     @Published private(set) var place: PlaceResult?
     @Published private(set) var details: PlaceDetails?
     @Published private(set) var lists: [CraveList] = []
     @Published var listId: String?
-    @Published var vibes: Set<String> = []
+    @Published var occasions: Set<String> = []
     @Published var note = ""
     @Published private(set) var saveError: String?
 
@@ -45,7 +45,7 @@ final class ShareModel: ObservableObject {
     }
 
     var listName: String { lists.first { $0.id == listId }?.name ?? "your list" }
-    var canSave: Bool { place != nil && listId != nil && !vibes.isEmpty && phase == .ready }
+    var canSave: Bool { place != nil && listId != nil && phase == .ready }
 
     private var started = false
 
@@ -101,8 +101,8 @@ final class ShareModel: ObservableObject {
         }
     }
 
-    func toggle(_ vibe: String) {
-        if vibes.contains(vibe) { vibes.remove(vibe) } else { vibes.insert(vibe) }
+    func toggle(_ occasion: String) {
+        if occasions.contains(occasion) { occasions.remove(occasion) } else { occasions.insert(occasion) }
     }
 
     func save() async {
@@ -116,7 +116,7 @@ final class ShareModel: ObservableObject {
         }
         do {
             try await api.save(place: place, details: fetchedDetails, photoUrl: photoUrl, listId: listId,
-                               vibes: Self.vibeOptions.filter { vibes.contains($0) },
+                               occasions: Self.occasionOptions.filter { occasions.contains($0) },
                                notes: note.trimmingCharacters(in: .whitespacesAndNewlines))
             SharedStore.set(listId, SharedStore.lastShareGroupKey)
             UINotificationFeedbackGenerator().notificationOccurred(.success)

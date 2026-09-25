@@ -9,6 +9,8 @@ struct PlaceResult: Decodable, Identifiable, Equatable {
     let lat: Double
     let lng: Double
     let primaryType: String?
+    /// All of Google's types; the database reads the cuisine and occasions from them.
+    let types: [String]?
     /// Google photo resource name, copied into Storage when the place is saved.
     let photoUrl: String?
     let city: String?
@@ -156,7 +158,7 @@ final class CraveAPI {
 
     /// Adds the place to a list, with the same fields the app saves.
     func save(place: PlaceResult, details: PlaceDetails?, photoUrl: String?, listId: String,
-              vibes: [String], notes: String) async throws {
+              occasions: [String], notes: String) async throws {
         func orNull<T>(_ value: T?) -> Any { value.map { $0 as Any } ?? NSNull() }
         let row: [String: Any] = [
             "group_id": listId,
@@ -172,8 +174,10 @@ final class CraveAPI {
             "user_rating_count": orNull(details?.userRatingCount ?? place.userRatingCount),
             "price_level": orNull(details?.priceLevel ?? place.priceLevel),
             "primary_type": orNull(place.primaryType),
+            "types": orNull(place.types),
             "photo_url": orNull(photoUrl),
-            "vibes": vibes,
+            // Added to the ones the database reads from the place's types and name.
+            "occasions": occasions,
             "notes": notes,
             "last_synced_at": ISO8601DateFormatter().string(from: Date()),
             "opening_hours": orNull(details?.openingHours),
