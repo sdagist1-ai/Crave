@@ -37,10 +37,30 @@ function blacklist(): string[] {
 }
 
 let checking = false;
+let reported = false;
+
+const describe = (err: unknown) =>
+  err instanceof Error ? `${err.name}: ${err.message}`
+  : typeof err === "object" && err && "message" in err ? String((err as { message: unknown }).message)
+  : String(err);
+
+/** A failed check, recorded once per launch so a broken updater shows up in Supabase. */
+async function reportCheckFailure(stage: string, err: unknown) {
+  if (reported) return;
+  reported = true;
+  try {
+    await supabase.from("ota_crash_logs").insert({
+      version: WEB_VERSION,
+      build: parseInt((await App.getInfo()).build, 10) || null,
+      error_message: `update check failed at ${stage}: ${describe(err)}`.slice(0, 1000),
+    });
+  } catch { /* offline */ }
+}
 
 async function checkForUpdate() {
   if (checking) return;
   checking = true;
+  let stage = "lookup";
   try {
     const build = parseInt((await App.getInfo()).build, 10) || 0;
     const { data: release, error } = await supabase
@@ -56,16 +76,20 @@ async function checkForUpdate() {
     if (blacklist().includes(release.version)) return;
 
     // Already downloaded (e.g. queued last time)? Otherwise fetch it.
+    stage = "list";
     const { bundles } = await CapacitorUpdater.list();
+    stage = "download";
     const bundle = bundles.find((b) => b.version === release.version && b.status !== "error")
       ?? await CapacitorUpdater.download({
         url: release.zip_url,
         version: release.version,
         ...(release.checksum ? { checksum: release.checksum } : {}),
       });
+    stage = "next";
     await CapacitorUpdater.next({ id: bundle.id });
   } catch (err) {
-    console.warn("Live update check failed", err);
+    console.warn(`Live update check failed at ${stage}`, err);
+    void reportCheckFailure(stage, err);
   } finally {
     checking = false;
   }
