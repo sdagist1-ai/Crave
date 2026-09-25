@@ -57,8 +57,10 @@ export type Restaurant = {
   userRatingCount: number | null;
   priceLevel: string | null;
   primaryType: string | null;
-  /** "Thai", "Nigerian"… Guessed on save; any member can change it. */
+  /** Cuisine group ("Asian", "African"…). Guessed on save; any member can change it. */
   cuisine: string | null;
+  /** The specific cuisine within the group, when known ("Thai", "Nigerian"). */
+  cuisineDetail: string | null;
   /** Brunch, Coffee, Drinks, Sweets, Quick bites (a place can have several). */
   occasions: string[];
   photoUrl: string | null;

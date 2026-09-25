@@ -19,6 +19,7 @@ type FeedRow = {
   price_level: string | null;
   primary_type: string | null;
   cuisine: string | null;
+  cuisine_detail: string | null;
   occasions: string[] | null;
   photo_url: string | null;
   website_url: string | null;
@@ -70,6 +71,7 @@ function toRestaurant(row: FeedRow, uid: string): Restaurant {
     priceLevel: row.price_level,
     primaryType: row.primary_type,
     cuisine: row.cuisine ?? null,
+    cuisineDetail: row.cuisine_detail ?? null,
     occasions: Array.isArray(row.occasions) ? row.occasions : [],
     photoUrl: row.photo_url,
     websiteUrl: row.website_url,

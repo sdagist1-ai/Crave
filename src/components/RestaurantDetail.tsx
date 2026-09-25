@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Share } from "@capacitor/share";
 import {
   CalendarDays, ChevronDown, ChevronLeft, Ellipsis, Globe, Navigation, Plus, Share2, Star, Trash2, UtensilsCrossed, X,
 } from "lucide-react";
 import type { Group, Restaurant } from "../types";
 import { syncRestaurantData } from "../lib/places";
-import { facetsQuery, guessCuisine, updatePlaceTags } from "../lib/cuisines";
+import { updatePlaceTags } from "../lib/cuisines";
 import { formatPriceLevel, formatScore, mapsLinks, todaysHours } from "../utils/helpers";
 import { Avatar, OccasionTag, PrimaryButton, Sheet, Tag } from "./ui";
 import { CuisinePicker } from "./CuisinePicker";
@@ -31,16 +31,8 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
   const [editingTags, setEditingTags] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
-  const facets = useQuery({ ...facetsQuery(r.groupId), enabled: editingTags }).data;
-  // What other lists call this place, as suggestions in the picker.
-  const crowd = useQuery({
-    queryKey: ["cuisineGuess", r.placeId, "detail"],
-    queryFn: () => guessCuisine({ id: r.placeId, name: r.name, primaryType: r.primaryType ?? undefined }),
-    enabled: editingTags,
-    staleTime: 5 * 60 * 1000,
-  }).data;
 
-  const saveTags = async (next: { cuisine: string | null; occasions?: string[] }) => {
+  const saveTags = async (next: { cuisine: string | null; occasions: string[] }) => {
     setSavingTags(true);
     setTagsError(null);
     try {
@@ -188,7 +180,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
           </div>
           <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.03em]">{r.name}</h1>
           <p className="m-0 text-sm text-muted">
-            {r.address}
+            {[r.cuisineDetail !== r.cuisine ? r.cuisineDetail : null, r.address].filter(Boolean).join(" · ")}
           </p>
           {showHours && r.openingHours && (
             <ul className="m-0 flex list-none flex-col gap-1 rounded-2xl border border-border bg-surface p-3.5 text-[13px] animate-rise">
@@ -318,8 +310,6 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
       {editingTags && (
         <CuisinePicker
           value={r.cuisine}
-          suggestions={crowd ? [...(crowd.cuisine ? [crowd.cuisine] : []), ...crowd.crowd] : []}
-          facets={facets}
           occasions={r.occasions}
           saving={savingTags}
           error={tagsError}

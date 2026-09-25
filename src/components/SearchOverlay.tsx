@@ -6,9 +6,8 @@ import { cachePlacePhoto, placeDetails, PlacesError, resolveShare, searchPlaces,
 import type { SharedPlace } from "../lib/shareInbox";
 import { useDebounce } from "../hooks/useDebounce";
 import { useApproxLocation } from "../hooks/useApproxLocation";
-import { OCCASIONS } from "../constants/theme";
-import { facetsQuery, guessCuisine } from "../lib/cuisines";
-import { CuisinePicker } from "./CuisinePicker";
+import { CUISINES, OCCASIONS } from "../constants/theme";
+import { guessCuisine } from "../lib/cuisines";
 import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
 import type { Group } from "../types";
 import { FilterChip, PrimaryButton, Tag } from "./ui";
@@ -61,7 +60,7 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   const [selected, setSelected] = useState<{ place: PlaceResult; from?: SavedPlace } | null>(null);
   // Left undefined, the database's guess is used; set, it's the member's choice.
   const [cuisine, setCuisine] = useState<string | null | undefined>(undefined);
-  const [pickingCuisine, setPickingCuisine] = useState(false);
+  const [changingCuisine, setChangingCuisine] = useState(false);
   const [occasions, setOccasions] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -117,11 +116,11 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
-  const facets = useQuery({ ...facetsQuery(activeGroupId ?? undefined), enabled: !!selected && !!activeGroupId }).data;
 
   const choose = (place: PlaceResult, from?: SavedPlace) => {
     setSelected({ place, from });
     setCuisine(undefined);
+    setChangingCuisine(false);
     setOccasions([]);
     setNotes(from?.notes ?? "");
     setSaveError(null);
@@ -195,11 +194,6 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     const priceLevel = details.data?.priceLevel ?? place.priceLevel;
     const fromName = from ? groups.find((g) => g.id === from.groupId)?.name : null;
     const shownCuisine = cuisine !== undefined ? cuisine : guess.data?.cuisine ?? null;
-    // No guess: offer what other lists call it, then this list's most common cuisines.
-    const quickCuisines = [...new Set([
-      ...(guess.data?.crowd ?? []),
-      ...[...(facets?.cuisines ?? [])].sort((a, b) => (b.cravelist + b.tried) - (a.cravelist + a.tried)).map((c) => c.label),
-    ])].slice(0, 4);
     return (
       <div role="dialog" aria-modal="true" aria-label={`Add ${place.name}`} className="fixed inset-0 z-50 flex flex-col bg-background animate-fade-in">
         <div className="flex items-center gap-2 px-3 pt-safe">
@@ -225,19 +219,19 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
             </span>
             {guess.isPending && cuisine === undefined ? (
               <span className="skeleton block h-9 w-24 rounded-full" aria-label="Finding the cuisine" />
-            ) : shownCuisine ? (
-              <button type="button" onClick={() => setPickingCuisine(true)} aria-label={`Cuisine: ${shownCuisine}. Tap to change`}
+            ) : shownCuisine && !changingCuisine ? (
+              <button type="button" onClick={() => setChangingCuisine(true)} aria-label={`Cuisine: ${shownCuisine}. Tap to change`}
                 className="flex h-9 items-center gap-1 rounded-full border border-accent bg-accent-soft pr-2.5 pl-3.5 text-[13px] font-medium text-accent-ink">
                 {shownCuisine} <ChevronDown size={14} aria-hidden="true" />
               </button>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {quickCuisines.map((c) => (
-                  <FilterChip key={c} active={false} onClick={() => setCuisine(c)}>{c}</FilterChip>
+                {CUISINES.map((c) => (
+                  <FilterChip key={c} active={shownCuisine === c}
+                    onClick={() => { setCuisine(shownCuisine === c ? null : c); setChangingCuisine(false); }}>
+                    {c}
+                  </FilterChip>
                 ))}
-                <FilterChip active={false} onClick={() => setPickingCuisine(true)}>
-                  {quickCuisines.length ? "Other…" : "Pick a cuisine"}
-                </FilterChip>
               </div>
             )}
           </div>
@@ -261,16 +255,6 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
               className="w-full resize-none rounded-2xl border border-border bg-surface p-3.5 text-[15px] outline-none placeholder:text-muted focus:border-accent" />
           </label>
         </div>
-
-        {pickingCuisine && (
-          <CuisinePicker
-            value={shownCuisine}
-            suggestions={[...(guess.data?.cuisine ? [guess.data.cuisine] : []), ...(guess.data?.crowd ?? [])]}
-            facets={facets}
-            onSave={(next) => { setCuisine(next.cuisine); setPickingCuisine(false); }}
-            onClose={() => setPickingCuisine(false)}
-          />
-        )}
 
         <div className="border-t border-border bg-background px-page pt-3 pb-safe">
           {saveError && <p role="alert" className="m-0 mb-2 text-center text-sm font-medium text-danger">{saveError}</p>}

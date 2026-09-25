@@ -138,6 +138,7 @@ export type Database = {
           primary_type: string | null
           types: string[] | null
           cuisine: string | null
+          cuisine_detail: string | null
           cuisine_source: string | null
           occasions: string[]
           occasions_set: boolean
@@ -170,6 +171,7 @@ export type Database = {
           primary_type?: string | null
           types?: string[] | null
           cuisine?: string | null
+          cuisine_detail?: string | null
           cuisine_source?: string | null
           occasions?: string[]
           occasions_set?: boolean
@@ -202,6 +204,7 @@ export type Database = {
           primary_type?: string | null
           types?: string[] | null
           cuisine?: string | null
+          cuisine_detail?: string | null
           cuisine_source?: string | null
           occasions?: string[]
           occasions_set?: boolean

@@ -83,6 +83,27 @@ the App Group from the share sheet; show "Why this spot?" as a quote from whoeve
 Avoid: public profiles, feeds, follower counts (breaks "private by design") and
 generic AI recommendations.
 
+## Security (next)
+
+1. **Cap the Google Places bill.** Any signed-in account can call the `places` function as
+   often as it likes, so a scripted abuser could run up Places charges.
+   - Now, no code: a daily quota cap on the Places API and a budget alert in Google Cloud.
+   - Then: a per-user rate limit in the `places` function.
+2. **Keep reviews inside shared lists.** Today anyone who shares *any* list with you can
+   read all your reviews and notes through the API, including places on lists they aren't
+   in (the app doesn't show them). Tighten the `reviews` SELECT policy so a review is
+   readable only when the reader is on a list that has that place.
+3. **Narrow what members can edit on a place.** Members can update any column of their
+   list's places (name, who added it, `photo_url`, which could point at an outside server
+   and see members' IP addresses). Grant UPDATE only on the columns the app edits, keeping
+   what app 1.3 writes working.
+4. **Review photos are public links** (random names, but anyone with a link can open
+   them). Switch to signed URLs if that becomes a concern.
+
+The advisor's "SECURITY DEFINER function executable" warnings (create_group,
+delete_user_account, guess_place_cuisine, join_group, reset_share_code) are intended:
+each checks the caller.
+
 ## Security follow-ups (once most people are on 1.4)
 
 - **Stop the app uploading to `place_photos`.** Only the `places` function should write
@@ -110,6 +131,11 @@ generic AI recommendations.
 - **Ask for an App Store rating at a happy moment** (after rating a place 9+).
 
 ## Smaller ideas
+
+- **Cafés, bakeries and bars under "Needs a cuisine".** Leave places whose occasions are
+  Coffee, Sweets or Drinks out of that group, since they don't really need a cuisine.
+- **New "Save from Maps" screenshot for the site** (`site/img/6-share.webp` still shows
+  the old vibe picker).
 
 - "Rebecca added Lucali 🍕" banner when a list member adds a place (live updates
   already sync the list; this makes it visible).

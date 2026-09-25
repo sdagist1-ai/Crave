@@ -26,6 +26,13 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [occasion, setOccasion] = useState<string | null>(null);
   const [sort, setSort] = useState<SortOption>("newest");
+  // Another list has other cuisines and occasions: start it unfiltered.
+  const [filtersFor, setFiltersFor] = useState(group?.id);
+  if (filtersFor !== group?.id) {
+    setFiltersFor(group?.id);
+    setCuisines([]);
+    setOccasion(null);
+  }
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 

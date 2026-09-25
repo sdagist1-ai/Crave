@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
-import { byRegion, cuisinesLabel, NEEDS_CUISINE, type ListFacets } from "../lib/cuisines";
+import { ChevronDown, X } from "lucide-react";
+import { cuisinesLabel, NEEDS_CUISINE, type ListFacets } from "../lib/cuisines";
 import { OCCASIONS } from "../constants/theme";
 import { FilterChip, PrimaryButton, Sheet } from "./ui";
 
@@ -68,7 +68,7 @@ export function FilterRow({ facets, tab, cuisines, occasion, onCuisines, onOccas
   );
 }
 
-/** Every cuisine on the list, grouped by region with counts. Pick one or several. */
+/** The cuisines on the list, with counts. Pick one or several. */
 function CuisineSheet({ facets, tab, selected, onApply, onClose }: {
   facets: ListFacets | undefined;
   tab: Tab;
@@ -77,16 +77,13 @@ function CuisineSheet({ facets, tab, selected, onApply, onClose }: {
   onClose: () => void;
 }) {
   const [picked, setPicked] = useState<string[]>(selected);
-  const [query, setQuery] = useState("");
   const toggle = (label: string) =>
     setPicked(picked.includes(label) ? picked.filter((c) => c !== label) : [...picked, label]);
 
-  const q = query.trim().toLowerCase();
   const all = facets?.cuisines ?? [];
-  const regions = byRegion(all.filter((c) =>
-    (c[tab] > 0 || picked.includes(c.label)) && (!q || c.label.toLowerCase().includes(q) || c.region.toLowerCase().includes(q))));
+  const shown = all.filter((c) => c[tab] > 0 || picked.includes(c.label));
   const needs = facets?.needs_cuisine[tab] ?? 0;
-  const showNeeds = (needs > 0 || picked.includes(NEEDS_CUISINE)) && (!q || "needs a cuisine".includes(q));
+  const showNeeds = needs > 0 || picked.includes(NEEDS_CUISINE);
 
   const count = (label: string) =>
     label === NEEDS_CUISINE ? needs : all.find((c) => c.label === label)?.[tab] ?? 0;
@@ -100,7 +97,7 @@ function CuisineSheet({ facets, tab, selected, onApply, onClose }: {
         type="button"
         onClick={() => toggle(label)}
         aria-pressed={on}
-        className={`flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] transition-colors ${on ? "border-accent bg-accent-soft font-medium text-accent-ink" : "border-border text-ink-2 active:bg-subtle"}`}
+        className={`flex h-10 items-center gap-1.5 rounded-full border px-4 text-[14px] transition-colors ${on ? "border-accent bg-accent-soft font-medium text-accent-ink" : "border-border text-ink-2 active:bg-subtle"}`}
       >
         {name}
         <span className={`font-mono text-[11px] tabular ${on ? "text-accent-ink" : "text-muted"}`}>{n}</span>
@@ -110,34 +107,16 @@ function CuisineSheet({ facets, tab, selected, onApply, onClose }: {
 
   return (
     <Sheet title="Cuisines" onClose={onClose}>
-      <label className="mb-4 flex h-11 items-center gap-2 rounded-2xl bg-subtle px-3.5 text-muted">
-        <Search size={16} aria-hidden="true" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search cuisines"
-          aria-label="Search cuisines"
-          className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-muted"
-        />
-      </label>
-
-      <div className="flex flex-col gap-4 pb-4">
-        {regions.map(([region, items]) => (
-          <section key={region}>
-            <h3 className="m-0 mb-2 font-mono text-[10px] tracking-[0.14em] text-muted uppercase">{region}</h3>
-            <div className="flex flex-wrap gap-2">{items.map((c) => chip(c.label, c.label, c[tab]))}</div>
-          </section>
-        ))}
+      <div className="flex flex-col gap-5 pb-4">
+        {shown.length > 0 && <div className="flex flex-wrap gap-2">{shown.map((c) => chip(c.label, c.label, c[tab]))}</div>}
         {showNeeds && (
           <section>
             <h3 className="m-0 mb-2 font-mono text-[10px] tracking-[0.14em] text-muted uppercase">Not sorted yet</h3>
             <div className="flex flex-wrap gap-2">{chip(NEEDS_CUISINE, "Needs a cuisine", needs)}</div>
           </section>
         )}
-        {regions.length === 0 && !showNeeds && (
-          <p className="m-0 py-6 text-center text-sm text-muted">
-            {q ? `No “${query.trim()}” on this list yet.` : "No cuisines here yet."}
-          </p>
+        {shown.length === 0 && !showNeeds && (
+          <p className="m-0 py-6 text-center text-sm text-muted">No cuisines here yet.</p>
         )}
       </div>
 
