@@ -7,7 +7,7 @@
 // search reliable on device.
 //
 // POST { action: "search", query, lat?, lng? }  -> { places: PlaceResult[] }
-// POST { action: "details", placeId }           -> { openingHours, photoName, rating, userRatingCount, priceLevel, city, area, countryCode }
+// POST { action: "details", placeId }           -> { openingHours, photoName, rating, userRatingCount, priceLevel, types, city, area, countryCode }
 // POST { action: "photo", photoName, placeId }  -> { url }  (cached in Storage)
 // POST { action: "resolve_share", url?, text? } -> { query, name, lat, lng }
 //      Turns what Apple Maps / Google Maps share (a link and/or text) into a
@@ -39,8 +39,9 @@ const FOOD_TYPES = new Set([
 const isFoodPlace = (p: GooglePlace) =>
   [p.primaryType, ...(p.types ?? [])].some((t) => !!t && (FOOD_TYPES.has(t) || t.endsWith("_restaurant")));
 
-// Opening hours already make Details an Enterprise request, so rating and price come free with it.
-const DETAILS_FIELDS = "regularOpeningHours,photos,addressComponents,rating,userRatingCount,priceLevel";
+// Opening hours already make Details an Enterprise request, so rating, price and types come
+// free with it. Types keep a place's guessed cuisine and occasions up to date.
+const DETAILS_FIELDS = "regularOpeningHours,photos,addressComponents,rating,userRatingCount,priceLevel,primaryType,types";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -101,6 +102,7 @@ function toPlaceResult(p: GooglePlace) {
     userRatingCount: p.userRatingCount,
     priceLevel: p.priceLevel,
     primaryType: p.primaryType,
+    types: p.types,
     photoUrl: p.photos?.[0]?.name,
     openNow: p.currentOpeningHours?.openNow,
     openingHours: p.regularOpeningHours?.weekdayDescriptions,
@@ -157,6 +159,8 @@ async function details(placeId: unknown) {
     rating: place.rating ?? null,
     userRatingCount: place.userRatingCount ?? null,
     priceLevel: place.priceLevel ?? null,
+    primaryType: place.primaryType ?? null,
+    types: place.types ?? null,
     ...locationOf(place),
   });
 }

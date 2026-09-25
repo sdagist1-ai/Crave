@@ -5,9 +5,10 @@ import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { Dices, Shuffle } from "lucide-react";
 import type { Restaurant } from "../types";
 import { fetchRestaurants } from "../lib/restaurants";
-import { CATEGORIES, VIBE_OPTIONS } from "../constants/theme";
+import { facetsQuery } from "../lib/cuisines";
+import { FilterRow } from "../components/CuisineFilters";
 import { placeSubtitle } from "../utils/helpers";
-import { Eyebrow, FilterChip, PageTitle, Segmented } from "../components/ui";
+import { Eyebrow, PageTitle, Segmented } from "../components/ui";
 
 type Mode = "new" | "nostalgia";
 
@@ -35,10 +36,10 @@ export function SpinTab({ uid, groupId, onOpen, active = true }: {
   active?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("new");
-  const [category, setCategory] = useState<string | null>(null);
-  const [vibes, setVibes] = useState<string[]>([]);
+  const [cuisines, setCuisines] = useState<string[]>([]);
+  const [occasion, setOccasion] = useState<string | null>(null);
   // The pick belongs to the pool it was drawn from; changing the pool clears it.
-  const poolKey = [groupId, mode, category, vibes.join(",")].join("|");
+  const poolKey = [groupId, mode, cuisines.join(","), occasion].join("|");
   const [picked, setPicked] = useState<{ key: string; r: Restaurant } | null>(null);
   const pick = picked?.key === poolKey ? picked.r : null;
   const setPick = (r: Restaurant | null) => setPicked(r ? { key: poolKey, r } : null);
@@ -50,15 +51,16 @@ export function SpinTab({ uid, groupId, onOpen, active = true }: {
   const timers = useRef<number[]>([]);
 
   const pool = useQuery({
-    queryKey: ["restaurants", "spin", uid, groupId, mode, category, vibes],
+    queryKey: ["restaurants", "spin", uid, groupId, mode, cuisines, occasion],
     queryFn: async () => (await fetchRestaurants({
       uid, groupId: groupId!, filterTab: mode === "new" ? "cravelist" : "tried",
-      filterCategory: category, filterVibes: vibes, all: true,
+      filterCuisines: cuisines, filterOccasion: occasion, all: true,
     })).restaurants,
     enabled: !!groupId,
     subscribed: active,
   });
   const places = pool.data ?? [];
+  const facets = useQuery({ ...facetsQuery(groupId), subscribed: active }).data;
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
@@ -106,7 +108,6 @@ export function SpinTab({ uid, groupId, onOpen, active = true }: {
   };
 
   const shown = flash ?? pick;
-  const toggleVibe = (v: string) => setVibes(vibes.includes(v) ? vibes.filter((x) => x !== v) : [...vibes, v]);
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
@@ -174,18 +175,8 @@ export function SpinTab({ uid, groupId, onOpen, active = true }: {
           options={[{ id: "new", label: "New spots" }, { id: "nostalgia", label: "Nostalgia" }]}
         />
 
-        <div className="-mx-5 flex gap-2 overflow-x-auto px-5">
-          <FilterChip active={!category} onClick={() => setCategory(null)}>All</FilterChip>
-          {CATEGORIES.map((c) => (
-            <FilterChip key={c.id} active={category === c.id} onClick={() => setCategory(category === c.id ? null : c.id)}>
-              {c.label}
-            </FilterChip>
-          ))}
-          <span className="my-2 w-px shrink-0 bg-border" aria-hidden="true" />
-          {VIBE_OPTIONS.map((v) => (
-            <FilterChip key={v} active={vibes.includes(v)} onClick={() => toggleVibe(v)}>{v}</FilterChip>
-          ))}
-        </div>
+        <FilterRow facets={facets} tab={mode === "new" ? "cravelist" : "tried"} cuisines={cuisines} occasion={occasion}
+          onCuisines={setCuisines} onOccasion={setOccasion} />
 
         <button
           type="button"

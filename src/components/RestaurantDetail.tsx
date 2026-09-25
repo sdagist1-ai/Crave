@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Share } from "@capacitor/share";
 import {
-  CalendarDays, ChevronDown, ChevronLeft, Ellipsis, Globe, Navigation, Share2, Star, Trash2, UtensilsCrossed, X,
+  CalendarDays, ChevronDown, ChevronLeft, Ellipsis, Globe, Navigation, Plus, Share2, Star, Trash2, UtensilsCrossed, X,
 } from "lucide-react";
 import type { Group, Restaurant } from "../types";
 import { syncRestaurantData } from "../lib/places";
-import { formatPriceLevel, formatPrimaryType, formatScore, mapsLinks, todaysHours } from "../utils/helpers";
-import { Avatar, PrimaryButton, Sheet, Tag, VibeTag } from "./ui";
+import { facetsQuery, guessCuisine, updatePlaceTags } from "../lib/cuisines";
+import { formatPriceLevel, formatScore, mapsLinks, todaysHours } from "../utils/helpers";
+import { Avatar, OccasionTag, PrimaryButton, Sheet, Tag } from "./ui";
+import { CuisinePicker } from "./CuisinePicker";
 import { displayName } from "../utils/people";
 
 const SYNC_AFTER_DAYS = 30;
@@ -26,6 +28,32 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
   const [sheet, setSheet] = useState<null | "directions" | "more" | "confirm-remove">(null);
   const [viewer, setViewer] = useState<number | null>(null);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const [editingTags, setEditingTags] = useState(false);
+  const [savingTags, setSavingTags] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const facets = useQuery({ ...facetsQuery(r.groupId), enabled: editingTags }).data;
+  // What other lists call this place, as suggestions in the picker.
+  const crowd = useQuery({
+    queryKey: ["cuisineGuess", r.placeId, "detail"],
+    queryFn: () => guessCuisine({ id: r.placeId, name: r.name, primaryType: r.primaryType ?? undefined }),
+    enabled: editingTags,
+    staleTime: 5 * 60 * 1000,
+  }).data;
+
+  const saveTags = async (next: { cuisine: string | null; occasions?: string[] }) => {
+    setSavingTags(true);
+    setTagsError(null);
+    try {
+      await updatePlaceTags(r.id, next);
+      await queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+      setEditingTags(false);
+    } catch (err) {
+      console.error("Failed to update cuisine:", err);
+      setTagsError("Couldn't save that. Check your connection and try again.");
+    } finally {
+      setSavingTags(false);
+    }
+  };
 
   // Refresh hours/photo/location from Google when missing or older than 30 days.
   useEffect(() => {
@@ -140,7 +168,15 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
         {/* Title block */}
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-1.5">
-            {r.vibes.map((v) => <VibeTag key={v} vibe={v} />)}
+            <button type="button" onClick={() => setEditingTags(true)}
+              aria-label={r.cuisine ? `Cuisine: ${r.cuisine}. Tap to change` : "Add a cuisine"}
+              className={`inline-flex items-center gap-0.5 rounded-full border px-2 py-[2px] text-[11px] leading-none ${r.cuisine ? "border-border-strong bg-surface text-ink" : "border-dashed border-border-strong text-muted"}`}>
+              {r.cuisine ?? <><Plus size={11} aria-hidden="true" /> Cuisine</>}
+              {r.cuisine && <ChevronDown size={11} className="text-muted" aria-hidden="true" />}
+            </button>
+            {r.occasions.map((o) => (
+              <button key={o} type="button" onClick={() => setEditingTags(true)} aria-label={`${o}. Tap to change`}><OccasionTag occasion={o} /></button>
+            ))}
             {price && <Tag>{price}</Tag>}
             {hoursToday && (
               <button type="button" onClick={() => setShowHours(!showHours)} aria-expanded={showHours}
@@ -152,7 +188,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
           </div>
           <h1 className="m-0 font-display text-[34px] leading-none font-extrabold tracking-[-0.03em]">{r.name}</h1>
           <p className="m-0 text-sm text-muted">
-            {[formatPrimaryType(r.primaryType), r.address].filter(Boolean).join(" · ")}
+            {r.address}
           </p>
           {showHours && r.openingHours && (
             <ul className="m-0 flex list-none flex-col gap-1 rounded-2xl border border-border bg-surface p-3.5 text-[13px] animate-rise">
@@ -277,6 +313,19 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
             ))}
           </div>
         </Sheet>
+      )}
+
+      {editingTags && (
+        <CuisinePicker
+          value={r.cuisine}
+          suggestions={crowd ? [...(crowd.cuisine ? [crowd.cuisine] : []), ...crowd.crowd] : []}
+          facets={facets}
+          occasions={r.occasions}
+          saving={savingTags}
+          error={tagsError}
+          onSave={saveTags}
+          onClose={() => { setEditingTags(false); setTagsError(null); }}
+        />
       )}
 
       {sheet === "more" && (

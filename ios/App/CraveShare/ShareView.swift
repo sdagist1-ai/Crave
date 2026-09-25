@@ -164,11 +164,11 @@ struct ShareView: View {
                             .disabled(model.lists.count < 2)
                         }
 
-                        // Vibe
-                        field("Vibe") {
-                            HStack(spacing: 10) {
-                                ForEach(ShareModel.vibeOptions, id: \.self) { vibe in
-                                    vibeChip(vibe)
+                        // Occasions (optional)
+                        field("Good for", optional: true) {
+                            HStack(spacing: 8) {
+                                ForEach(ShareModel.occasionOptions, id: \.self) { occasion in
+                                    occasionChip(occasion)
                                 }
                             }
                         }
@@ -238,13 +238,14 @@ struct ShareView: View {
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(Palette.border))
     }
 
-    private func vibeChip(_ vibe: String) -> some View {
-        let on = model.vibes.contains(vibe)
-        return Button { model.toggle(vibe) } label: {
-            HStack(spacing: 6) {
-                Image(systemName: vibe == "Elegant" ? "sparkles" : "cup.and.saucer")
-                    .font(.system(size: 14, weight: .semibold))
-                Text(vibe).font(.system(size: 15, weight: .semibold))
+    private func occasionChip(_ occasion: String) -> some View {
+        let on = model.occasions.contains(occasion)
+        let icon = occasion == "Date night" ? "heart" : occasion == "Brunch" ? "sun.max" : "moon.stars"
+        return Button { model.toggle(occasion) } label: {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(occasion).font(.system(size: 14, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
             }
             .foregroundColor(on ? Palette.accentInk : Palette.ink)
             .frame(maxWidth: .infinity)
@@ -285,11 +286,6 @@ struct ShareView: View {
             .buttonStyle(.plain)
             .disabled(!model.canSave)
 
-            if model.vibes.isEmpty {
-                Text("Pick a vibe to save")
-                    .font(.system(size: 13))
-                    .foregroundColor(Palette.muted)
-            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)

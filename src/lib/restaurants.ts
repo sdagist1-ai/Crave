@@ -18,6 +18,8 @@ type FeedRow = {
   user_rating_count: number | null;
   price_level: string | null;
   primary_type: string | null;
+  cuisine: string | null;
+  occasions: string[] | null;
   photo_url: string | null;
   website_url: string | null;
   booking_platform: string | null;
@@ -67,6 +69,8 @@ function toRestaurant(row: FeedRow, uid: string): Restaurant {
     userRatingCount: row.user_rating_count,
     priceLevel: row.price_level,
     primaryType: row.primary_type,
+    cuisine: row.cuisine ?? null,
+    occasions: Array.isArray(row.occasions) ? row.occasions : [],
     photoUrl: row.photo_url,
     websiteUrl: row.website_url,
     bookingPlatform: row.booking_platform,
@@ -98,7 +102,9 @@ export type FetchRestaurantsOptions = {
   /** Offset of the page to fetch, as returned in `nextCursor`. */
   pageParam?: string | null;
   filterTab?: "cravelist" | "tried";
-  filterCategory?: string | null;
+  /** Any of these cuisines; "" matches places that don't have one yet. */
+  filterCuisines?: string[];
+  filterOccasion?: string | null;
   filterVibes?: string[];
   sortBy?: SortOption;
   search?: string;
@@ -109,7 +115,7 @@ export type FetchRestaurantsOptions = {
 
 /** A page of a Cravelist, fully assembled by the database in a single call. */
 export async function fetchRestaurants({
-  uid, groupId, pageParam, filterTab, filterCategory, filterVibes, sortBy, search, restaurantId, all,
+  uid, groupId, pageParam, filterTab, filterCuisines, filterOccasion, filterVibes, sortBy, search, restaurantId, all,
 }: FetchRestaurantsOptions): Promise<{ restaurants: Restaurant[]; nextCursor: string | null }> {
   if (!uid || !groupId) return { restaurants: [], nextCursor: null };
 
@@ -119,13 +125,14 @@ export async function fetchRestaurants({
   const { data, error } = await supabase.rpc("get_group_feed", {
     p_group_id: groupId,
     p_tab: filterTab,
-    p_category: filterCategory ?? undefined,
     p_vibes: filterVibes?.length ? filterVibes : undefined,
     p_sort: sortBy ?? "newest",
     p_limit: pageSize,
     p_offset: offset,
     p_restaurant_id: restaurantId,
     p_search: search?.trim() || undefined,
+    p_cuisines: filterCuisines?.length ? filterCuisines : undefined,
+    p_occasion: filterOccasion ?? undefined,
   });
   if (error) throw error;
 
@@ -138,13 +145,13 @@ export async function fetchRestaurants({
 
 /** The list tab's feed query. Shared so launch can start it before the lists load. */
 export function feedQuery(uid: string, groupId: string | undefined, filters: {
-  tab: "cravelist" | "tried"; category: string | null; vibes: string[]; sort: SortOption;
+  tab: "cravelist" | "tried"; cuisines: string[]; occasion: string | null; vibes: string[]; sort: SortOption;
 }) {
   return infiniteQueryOptions({
-    queryKey: ["restaurants", "feed", uid, groupId, filters.tab, filters.category, filters.vibes, filters.sort],
+    queryKey: ["restaurants", "feed", uid, groupId, filters.tab, filters.cuisines, filters.occasion, filters.vibes, filters.sort],
     queryFn: ({ pageParam }) => fetchRestaurants({
-      uid, groupId: groupId ?? "", pageParam, filterTab: filters.tab, filterCategory: filters.category,
-      filterVibes: filters.vibes, sortBy: filters.sort,
+      uid, groupId: groupId ?? "", pageParam, filterTab: filters.tab, filterCuisines: filters.cuisines,
+      filterOccasion: filters.occasion, filterVibes: filters.vibes, sortBy: filters.sort,
     }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
@@ -152,4 +159,4 @@ export function feedQuery(uid: string, groupId: string | undefined, filters: {
 }
 
 /** What the list tab shows first. */
-export const DEFAULT_FEED: Parameters<typeof feedQuery>[2] = { tab: "cravelist", category: null, vibes: [], sort: "newest" };
+export const DEFAULT_FEED: Parameters<typeof feedQuery>[2] = { tab: "cravelist", cuisines: [], occasion: null, vibes: [], sort: "newest" };

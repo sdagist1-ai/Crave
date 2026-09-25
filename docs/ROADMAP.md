@@ -10,6 +10,11 @@ Ideas we've agreed are worth doing, roughly in order. Not scheduled yet.
 - Expected: cost per active user drops from ~$0.48/mo to ~$0.05–0.08/mo.
 - Needs: a Maps ID + private key from the Apple Developer account; the `places`
   function gets an Apple search step. The Maps share sheet already skips search.
+- Cuisines and occasions keep working: they're worked out in the database from a list of
+  type words plus the name, and the one Google Details call at save time already returns
+  Google's `types`. Apple's categories are coarser (Restaurant, Cafe, Bakery, Nightlife…,
+  no cuisines), so map them to the same words for anything saved without Google
+  (Cafe → `cafe`, Bakery → `bakery`, Nightlife/Brewery/Winery → `bar`).
 
 Current estimate (Google Places + Supabase Pro $25/mo), before this change:
 

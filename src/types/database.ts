@@ -101,6 +101,19 @@ export type Database = {
         }
         Relationships: []
       }
+      cuisine_catalog: {
+        Row: {
+          label: string
+          region: string
+          sort: number
+          generic: boolean
+          google_types: string[]
+          name_keywords: string[]
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       restaurants: {
         Row: {
           address: string
@@ -123,6 +136,11 @@ export type Database = {
           place_id: string
           price_level: string | null
           primary_type: string | null
+          types: string[] | null
+          cuisine: string | null
+          cuisine_source: string | null
+          occasions: string[]
+          occasions_set: boolean
           rating: number | null
           user_rating_count: number | null
           vibes: Json
@@ -150,6 +168,11 @@ export type Database = {
           place_id: string
           price_level?: string | null
           primary_type?: string | null
+          types?: string[] | null
+          cuisine?: string | null
+          cuisine_source?: string | null
+          occasions?: string[]
+          occasions_set?: boolean
           rating?: number | null
           user_rating_count?: number | null
           vibes?: Json
@@ -177,6 +200,11 @@ export type Database = {
           place_id?: string
           price_level?: string | null
           primary_type?: string | null
+          types?: string[] | null
+          cuisine?: string | null
+          cuisine_source?: string | null
+          occasions?: string[]
+          occasions_set?: boolean
           rating?: number | null
           user_rating_count?: number | null
           vibes?: Json
@@ -259,8 +287,15 @@ export type Database = {
           p_sort?: string
           p_tab?: string
           p_vibes?: string[]
+          p_cuisines?: string[]
+          p_occasion?: string
         }
         Returns: Json[]
+      }
+      get_list_facets: { Args: { p_group_id: string }; Returns: Json }
+      guess_place_cuisine: {
+        Args: { p_place_id: string; p_primary_type?: string; p_types?: string[]; p_name?: string }
+        Returns: Json
       }
       get_my_groups: { Args: never; Returns: Json[] }
       get_my_stats: { Args: never; Returns: Json }

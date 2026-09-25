@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, CloudOff, Loader2, LocateFixed, Plus, Search, Star, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, CloudOff, Loader2, LocateFixed, Plus, Search, Star, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { cachePlacePhoto, placeDetails, PlacesError, resolveShare, searchPlaces, type PlaceResult } from "../lib/places";
 import type { SharedPlace } from "../lib/shareInbox";
 import { useDebounce } from "../hooks/useDebounce";
 import { useApproxLocation } from "../hooks/useApproxLocation";
-import { VIBE_OPTIONS } from "../constants/theme";
+import { OCCASIONS } from "../constants/theme";
+import { facetsQuery, guessCuisine } from "../lib/cuisines";
+import { CuisinePicker } from "./CuisinePicker";
 import { formatPriceLevel, formatPrimaryType } from "../utils/helpers";
 import type { Group } from "../types";
 import { FilterChip, PrimaryButton, Tag } from "./ui";
@@ -16,7 +18,6 @@ export type SavedPlace = {
   placeId: string;
   groupId: string;
   photoUrl: string | null;
-  vibes: string[];
   notes: string | null;
   openingHours: string[] | null;
 };
@@ -58,7 +59,10 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   // Each search is a paid Google request: wait for a real pause and 3+ characters.
   const debouncedQuery = useDebounce(query, 500);
   const [selected, setSelected] = useState<{ place: PlaceResult; from?: SavedPlace } | null>(null);
-  const [vibes, setVibes] = useState<string[]>([]);
+  // Left undefined, the database's guess is used; set, it's the member's choice.
+  const [cuisine, setCuisine] = useState<string | null | undefined>(undefined);
+  const [pickingCuisine, setPickingCuisine] = useState(false);
+  const [occasions, setOccasions] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -105,9 +109,20 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     retry: 1,
   });
 
+  // The cuisine it'll be saved with: what other lists chose, else Google's type, else the name.
+  const guess = useQuery({
+    queryKey: ["cuisineGuess", selected?.place.id],
+    queryFn: () => guessCuisine(selected!.place),
+    enabled: !!selected,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+  const facets = useQuery({ ...facetsQuery(activeGroupId ?? undefined), enabled: !!selected && !!activeGroupId }).data;
+
   const choose = (place: PlaceResult, from?: SavedPlace) => {
     setSelected({ place, from });
-    setVibes(from?.vibes ?? []);
+    setCuisine(undefined);
+    setOccasions([]);
     setNotes(from?.notes ?? "");
     setSaveError(null);
   };
@@ -151,8 +166,12 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
         user_rating_count: d?.userRatingCount ?? place.userRatingCount ?? null,
         price_level: d?.priceLevel ?? place.priceLevel ?? null,
         primary_type: place.primaryType ?? null,
+        types: place.types ?? null,
+        // Only a cuisine the member chose; otherwise the database guesses it.
+        ...(cuisine ? { cuisine } : {}),
+        // Added to the ones the database reads from the place's type and name.
+        occasions,
         photo_url: photoUrl,
-        vibes,
         notes: notes.trim(),
         last_synced_at: new Date().toISOString(),
         opening_hours: d?.openingHours ?? place.openingHours ?? from?.openingHours ?? null,
@@ -175,6 +194,12 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     const rating = details.data?.rating ?? place.rating;
     const priceLevel = details.data?.priceLevel ?? place.priceLevel;
     const fromName = from ? groups.find((g) => g.id === from.groupId)?.name : null;
+    const shownCuisine = cuisine !== undefined ? cuisine : guess.data?.cuisine ?? null;
+    // No guess: offer what other lists call it, then this list's most common cuisines.
+    const quickCuisines = [...new Set([
+      ...(guess.data?.crowd ?? []),
+      ...[...(facets?.cuisines ?? [])].sort((a, b) => (b.cravelist + b.tried) - (a.cravelist + a.tried)).map((c) => c.label),
+    ])].slice(0, 4);
     return (
       <div role="dialog" aria-modal="true" aria-label={`Add ${place.name}`} className="fixed inset-0 z-50 flex flex-col bg-background animate-fade-in">
         <div className="flex items-center gap-2 px-3 pt-safe">
@@ -187,22 +212,43 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
 
         <div className="flex-1 overflow-y-auto px-page pt-4 pb-6">
           <h1 className="m-0 mb-2 font-display text-[32px] leading-none font-extrabold tracking-[-0.03em]">{place.name}</h1>
-          <p className="m-0 mb-3 text-sm text-muted">
-            {[formatPrimaryType(place.primaryType), place.address].filter(Boolean).join(" · ")}
-          </p>
+          <p className="m-0 mb-3 text-sm text-muted">{place.address}</p>
           <div className="mb-7 flex flex-wrap gap-1.5">
             {rating != null && <Tag tone="sun"><Star size={11} className="mr-1 fill-current" />{rating}</Tag>}
             {formatPriceLevel(priceLevel) && <Tag>{formatPriceLevel(priceLevel)}</Tag>}
             {fromName && <Tag tone="bg-accent-tint text-accent-ink">Also in {fromName}</Tag>}
           </div>
 
+          <div className="mb-6">
+            <span className="mb-2 block text-[13px] font-medium text-ink-2">
+              Cuisine{!guess.isPending && !shownCuisine && <span className="font-normal text-muted"> (optional)</span>}
+            </span>
+            {guess.isPending && cuisine === undefined ? (
+              <span className="skeleton block h-9 w-24 rounded-full" aria-label="Finding the cuisine" />
+            ) : shownCuisine ? (
+              <button type="button" onClick={() => setPickingCuisine(true)} aria-label={`Cuisine: ${shownCuisine}. Tap to change`}
+                className="flex h-9 items-center gap-1 rounded-full border border-accent bg-accent-soft pr-2.5 pl-3.5 text-[13px] font-medium text-accent-ink">
+                {shownCuisine} <ChevronDown size={14} aria-hidden="true" />
+              </button>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {quickCuisines.map((c) => (
+                  <FilterChip key={c} active={false} onClick={() => setCuisine(c)}>{c}</FilterChip>
+                ))}
+                <FilterChip active={false} onClick={() => setPickingCuisine(true)}>
+                  {quickCuisines.length ? "Other…" : "Pick a cuisine"}
+                </FilterChip>
+              </div>
+            )}
+          </div>
+
           <fieldset className="m-0 mb-6 border-0 p-0">
-            <legend className="mb-2 text-[13px] font-medium text-ink-2">Vibe</legend>
-            <div className="flex gap-2">
-              {VIBE_OPTIONS.map((v) => (
-                <FilterChip key={v} active={vibes.includes(v)}
-                  onClick={() => setVibes(vibes.includes(v) ? vibes.filter((x) => x !== v) : [...vibes, v])}>
-                  {v}
+            <legend className="mb-2 text-[13px] font-medium text-ink-2">Good for <span className="font-normal text-muted">(optional)</span></legend>
+            <div className="flex flex-wrap gap-2">
+              {OCCASIONS.map((o) => (
+                <FilterChip key={o} active={occasions.includes(o)}
+                  onClick={() => setOccasions(occasions.includes(o) ? occasions.filter((x) => x !== o) : [...occasions, o])}>
+                  {o}
                 </FilterChip>
               ))}
             </div>
@@ -216,13 +262,22 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
           </label>
         </div>
 
+        {pickingCuisine && (
+          <CuisinePicker
+            value={shownCuisine}
+            suggestions={[...(guess.data?.cuisine ? [guess.data.cuisine] : []), ...(guess.data?.crowd ?? [])]}
+            facets={facets}
+            onSave={(next) => { setCuisine(next.cuisine); setPickingCuisine(false); }}
+            onClose={() => setPickingCuisine(false)}
+          />
+        )}
+
         <div className="border-t border-border bg-background px-page pt-3 pb-safe">
           {saveError && <p role="alert" className="m-0 mb-2 text-center text-sm font-medium text-danger">{saveError}</p>}
-          <PrimaryButton onClick={save} disabled={saving || vibes.length === 0} tone="accent">
+          <PrimaryButton onClick={save} disabled={saving} tone="accent">
             {saving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} strokeWidth={2.6} />}
             {saving ? "Saving…" : `Save to ${listName}`}
           </PrimaryButton>
-          {vibes.length === 0 && <p className="m-0 mt-2 text-center text-xs text-muted">Pick a vibe to save</p>}
         </div>
       </div>
     );

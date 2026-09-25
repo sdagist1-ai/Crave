@@ -19,9 +19,9 @@ export function formatPrimaryType(type: string | null | undefined): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-/** "Ice cream · Brooklyn" */
-export function placeSubtitle(r: Pick<Restaurant, "primaryType" | "area">): string {
-  return [formatPrimaryType(r.primaryType), r.area].filter(Boolean).join(" · ");
+/** "Thai · Brooklyn", or Google's type ("Ice cream · Brooklyn") when there's no cuisine. */
+export function placeSubtitle(r: Pick<Restaurant, "primaryType" | "area"> & { cuisine?: string | null }): string {
+  return [r.cuisine || formatPrimaryType(r.primaryType), r.area].filter(Boolean).join(" · ");
 }
 
 /** Today's line from Google's weekday descriptions, e.g. "9 AM – 5 PM" or "Closed". */

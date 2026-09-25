@@ -39,13 +39,12 @@ const TAB_ORDER: TabId[] = ["list", "passport", "spin", "profile"];
 async function fetchSavedPlaces(): Promise<SavedPlace[]> {
   const { data, error } = await supabase
     .from("restaurants")
-    .select("place_id, group_id, photo_url, vibes, notes, opening_hours");
+    .select("place_id, group_id, photo_url, notes, opening_hours");
   if (error) throw error;
   return data.map((r) => ({
     placeId: r.place_id,
     groupId: r.group_id,
     photoUrl: r.photo_url,
-    vibes: Array.isArray(r.vibes) ? (r.vibes as string[]) : [],
     notes: r.notes,
     openingHours: Array.isArray(r.opening_hours) ? (r.opening_hours as string[]) : null,
   }));

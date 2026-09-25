@@ -15,6 +15,8 @@ export type PlaceResult = {
   userRatingCount?: number;
   priceLevel?: string;
   primaryType?: string;
+  /** All of Google's types, e.g. ["jamaican_restaurant", "restaurant", "food"] */
+  types?: string[];
   /** Google photo resource name (places/…/photos/…), not a URL */
   photoUrl?: string;
   openNow?: boolean;
@@ -80,6 +82,9 @@ export type PlaceDetails = {
   rating: number | null;
   userRatingCount: number | null;
   priceLevel: string | null;
+  /** Missing from functions deployed before types were added. */
+  primaryType?: string | null;
+  types?: string[] | null;
   city: string | null;
   area: string | null;
   countryCode: string | null;
@@ -108,6 +113,8 @@ export async function syncRestaurantData(placeId: string, supabaseId: number, ha
         ...(details.rating != null
           ? { rating: details.rating, user_rating_count: details.userRatingCount, price_level: details.priceLevel }
           : {}),
+        // New types re-guess the cuisine and occasions, unless a member set them.
+        ...(details.types?.length ? { types: details.types, primary_type: details.primaryType ?? null } : {}),
         ...(details.countryCode
           ? { city: details.city, area: details.area, country_code: details.countryCode }
           : {}),
