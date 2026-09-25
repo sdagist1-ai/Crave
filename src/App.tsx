@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { QueryClient, focusManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
@@ -9,6 +9,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { fetchRestaurants } from "./lib/restaurants";
 import { fetchMyGroups } from "./lib/groups";
+import { parseShareLink, receiveShare, useIncomingShare, type SharedPlace } from "./lib/shareInbox";
 import type { Restaurant, TabId } from "./types";
 
 import { BottomTabBar } from "./components/BottomTabBar";
@@ -74,6 +75,12 @@ function CraveApp({ uid }: { uid: string }) {
   const [addQuery, setAddQuery] = useState<string | null>(null); // non-null = "add a place" open
   const [detail, setDetail] = useState<Restaurant | null>(null);
   const [rating, setRating] = useState<Restaurant | null>(null);
+  const [shared, setShared] = useState<SharedPlace | null>(null); // a place shared from Maps
+  useIncomingShare(useCallback((s: SharedPlace) => {
+    setDetail(null);
+    setShared(s);
+    setAddQuery("");
+  }, []));
   const [storedGroupId, setStoredGroupId] = useState<string | null>(readStoredGroup);
 
   const groupsQuery = useQuery({ queryKey: ["groups", uid], queryFn: fetchMyGroups });
@@ -250,12 +257,14 @@ function CraveApp({ uid }: { uid: string }) {
       {addQuery !== null && (
         <Suspense fallback={<div className="fixed inset-0 z-50 bg-background" />}>
           <SearchOverlay
+            key={shared ? `${shared.url}|${shared.text}` : "add"}
             activeGroupId={groupId ?? null}
             savedPlaces={savedPlaces.data ?? []}
             groups={groups}
             initialQuery={addQuery}
-            onSave={() => setAddQuery(null)}
-            onClose={() => setAddQuery(null)}
+            shared={shared}
+            onSave={() => { setAddQuery(null); setShared(null); }}
+            onClose={() => { setAddQuery(null); setShared(null); }}
           />
         </Suspense>
       )}
@@ -330,11 +339,19 @@ export default function App() {
 
     // Handle native deep linking from emails
     const deepLinkListener = CapacitorApp.addListener('appUrlOpen', data => {
-      if (data.url.includes("type=recovery")) {
+      const shared = parseShareLink(data.url);
+      if (shared) receiveShare(shared);
+      else if (data.url.includes("type=recovery")) {
         const urlObj = new URL(data.url);
         processHash(urlObj.hash);
       }
     });
+
+    // Opened from the share sheet while the app wasn't running.
+    CapacitorApp.getLaunchUrl().then((launch) => {
+      const shared = launch?.url ? parseShareLink(launch.url) : null;
+      if (shared) receiveShare(shared);
+    }).catch(() => {});
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (s) hasBooted.current = true;

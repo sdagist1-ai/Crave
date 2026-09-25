@@ -121,6 +121,13 @@ export async function syncRestaurantData(placeId: string, supabaseId: number, ha
   }
 }
 
+/** What a Maps share points at: a search query, the place's name and (usually) its pin. */
+export async function resolveShare(shared: { url?: string; text?: string }) {
+  return callPlaces<{ query: string; name: string; lat: number | null; lng: number | null }>({
+    action: "resolve_share", url: shared.url, text: shared.text,
+  });
+}
+
 /**
  * Fill in city / area / country for the caller's places saved before those
  * columns existed (up to 40 per call; RLS limits it to their own lists).

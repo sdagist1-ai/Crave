@@ -9,6 +9,9 @@
 // POST { action: "search", query, lat?, lng? }  -> { places: PlaceResult[] }
 // POST { action: "details", placeId }           -> { openingHours, photoName, rating, userRatingCount, priceLevel, city, area, countryCode }
 // POST { action: "photo", photoName, placeId }  -> { url }  (cached in Storage)
+// POST { action: "resolve_share", url?, text? } -> { query, name, lat, lng }
+//      Turns what Apple Maps / Google Maps share (a link and/or text) into a
+//      search query and coordinates for the share-to-Crave flow.
 // POST { action: "backfill_locations" }         -> { updated, remaining }
 //      Fills city/area/country_code for places saved before those columns
 //      existed. Runs as the caller, so RLS limits it to their own lists.
@@ -197,6 +200,64 @@ async function backfillLocations(req: Request) {
   return json({ updated, remaining: count ?? null });
 }
 
+// Only map links are ever fetched (to expand Google's short links), never arbitrary URLs.
+const MAP_HOST = /^(maps\.app\.goo\.gl|goo\.gl|(www\.)?google\.[a-z.]+|maps\.google\.[a-z.]+|maps\.apple\.com|maps\.apple)$/i;
+
+function coord(lat: unknown, lng: unknown) {
+  const a = Number(lat), b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180 && (a || b)
+    ? { lat: a, lng: b } : null;
+}
+
+async function resolveShare(rawUrl: unknown, rawText: unknown) {
+  const text = typeof rawText === "string" ? rawText.slice(0, 2000) : "";
+  const link = (typeof rawUrl === "string" && rawUrl) || text.match(/https?:\/\/\S+/)?.[0] || "";
+
+  // Google Maps shares "Name\nAddress\nlink"; Apple Maps usually just the link.
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter((l) => l && !/https?:\/\//.test(l));
+  let name: string | null = lines[0] ?? null;
+  let address: string | null = lines[1] ?? null;
+  let at: { lat: number; lng: number } | null = null;
+
+  try {
+    let url: URL | null = link ? new URL(link) : null;
+    if (url && !MAP_HOST.test(url.hostname)) url = null;
+
+    // maps.app.goo.gl/… redirects to the full google.com/maps/place/… URL.
+    for (let hops = 0; url && /goo\.gl$/i.test(url.hostname) && hops < 5; hops++) {
+      const res = await fetch(url, { redirect: "manual" });
+      await res.body?.cancel();
+      const next = res.headers.get("location");
+      url = next ? new URL(next, url) : null;
+      if (url && !MAP_HOST.test(url.hostname)) url = null;
+    }
+
+    if (url) {
+      const q = url.searchParams;
+      if (/apple/i.test(url.hostname)) {
+        name = q.get("name") ?? q.get("q") ?? name;
+        address = q.get("address") ?? address;
+        const ll = (q.get("coordinate") ?? q.get("ll") ?? q.get("sll") ?? "").split(",");
+        at = coord(ll[0], ll[1]);
+      } else {
+        const place = url.pathname.match(/\/maps\/place\/([^/]+)/);
+        if (place) name = decodeURIComponent(place[1].replace(/\+/g, " "));
+        else if (q.get("q") ?? q.get("query")) name = q.get("q") ?? q.get("query");
+        const pin = url.href.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) ?? url.pathname.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+        if (pin) at = coord(pin[1], pin[2]);
+      }
+    }
+  } catch (err) {
+    console.warn("resolve_share: couldn't read link", err);
+  }
+
+  if (!name) return json({ error: "no_place" }, 422);
+  // "Lucali, 575 Henry St, Brooklyn" style names already carry the street.
+  const street = address && !name.includes(",") ? address.split(",")[0] : "";
+  const query = [name, street].filter(Boolean).join(" ").slice(0, 120);
+  return json({ query, name: name.split(",")[0].trim(), lat: at?.lat ?? null, lng: at?.lng ?? null });
+}
+
 async function photo(photoName: unknown, placeId: unknown) {
   if (typeof photoName !== "string" || !PHOTO_NAME_RE.test(photoName)) {
     return json({ error: "invalid_photo_name" }, 400);
@@ -241,6 +302,7 @@ Deno.serve(async (req) => {
       case "search": return await search(payload.query, payload.lat, payload.lng);
       case "details": return await details(payload.placeId);
       case "photo": return await photo(payload.photoName, payload.placeId);
+      case "resolve_share": return await resolveShare(payload.url, payload.text);
       case "backfill_locations": return await backfillLocations(req);
       default: return json({ error: "unknown_action" }, 400);
     }
