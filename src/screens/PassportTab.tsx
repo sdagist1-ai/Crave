@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { MUST_SCORE, type Group, type Restaurant } from "../types";
-import { fetchRestaurants } from "../lib/restaurants";
+import { wholeListQuery } from "../lib/restaurants";
 import { backfillLocations } from "../lib/places";
 import { formatScore } from "../utils/helpers";
 import { Eyebrow, PageTitle, Sheet } from "../components/ui";
@@ -38,12 +38,7 @@ export function PassportTab({ uid, group, onOpen, active = true }: {
   const [showMap, setShowMap] = useState(false);
   const [showAllStamps, setShowAllStamps] = useState(false);
 
-  const places = useQuery({
-    queryKey: ["restaurants", "passport", uid, group?.id],
-    queryFn: async () => (await fetchRestaurants({ uid, groupId: group!.id, all: true })).restaurants,
-    enabled: !!group,
-    subscribed: active,
-  });
+  const places = useQuery({ ...wholeListQuery(uid, group?.id), subscribed: active });
 
   // Places saved before city/country were stored count as 0 Cities/Countries.
   // Fill them in once, in the background, then refresh the counts.

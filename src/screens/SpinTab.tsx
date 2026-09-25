@@ -4,7 +4,7 @@ import confetti from "canvas-confetti";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { Dices, Shuffle } from "lucide-react";
 import type { Restaurant } from "../types";
-import { fetchRestaurants } from "../lib/restaurants";
+import { fetchRestaurants, filterLocally, wholeListQuery } from "../lib/restaurants";
 import { facetsQuery } from "../lib/cuisines";
 import { FilterRow } from "../components/CuisineFilters";
 import { placeSubtitle } from "../utils/helpers";
@@ -50,6 +50,7 @@ export function SpinTab({ uid, groupId, onOpen, active = true }: {
   const [spins, setSpins] = useState(0);
   const timers = useRef<number[]>([]);
 
+  const whole = useQuery({ ...wholeListQuery(uid, groupId), subscribed: active }).data;
   const pool = useQuery({
     queryKey: ["restaurants", "spin", uid, groupId, mode, cuisines, occasion],
     queryFn: async () => (await fetchRestaurants({
@@ -58,6 +59,8 @@ export function SpinTab({ uid, groupId, onOpen, active = true }: {
     })).restaurants,
     enabled: !!groupId,
     subscribed: active,
+    // Instant from the whole list when it's on the phone; the server's pool replaces it.
+    placeholderData: () => whole ? filterLocally(whole, { tab: mode === "new" ? "cravelist" : "tried", cuisines, occasion }) : undefined,
   });
   const places = pool.data ?? [];
   const facets = useQuery({ ...facetsQuery(groupId), subscribed: active }).data;

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ArrowDownUp, Check, ChevronDown, Loader2, Plus } from "lucide-react";
 import type { Group, Restaurant, SortOption } from "../types";
-import { feedQuery } from "../lib/restaurants";
+import { feedQuery, filterLocally, wholeListQuery } from "../lib/restaurants";
 import { facetsQuery } from "../lib/cuisines";
 import { SORT_LABELS, TAB_SORTS } from "../constants/theme";
 import { FilterRow } from "../components/CuisineFilters";
@@ -40,14 +40,26 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
+  // The whole list, loaded once in the background after the first page. A new filter
+  // or sort shows its results from it instantly, while the server's page loads.
+  const [wantWhole, setWantWhole] = useState(false);
+  const whole = useQuery({ ...wholeListQuery(uid, group?.id), enabled: !!group && wantWhole, subscribed: active }).data;
+  const preview = useMemo(
+    () => (whole ? filterLocally(whole, { tab, cuisines, occasion, sort }) : null),
+    [whole, tab, cuisines, occasion, sort],
+  );
+
   const feed = useInfiniteQuery({
     ...feedQuery(uid, group?.id, { tab, cuisines, occasion, vibes: [], sort }),
     enabled: !!group,
-    placeholderData: keepPreviousData,
+    placeholderData: (previous) => preview
+      ? { pages: [{ restaurants: preview, nextCursor: null }], pageParams: [null] }
+      : keepPreviousData(previous),
     // Hidden tabs keep their data but don't refetch; they catch up when shown.
     subscribed: active,
   });
   const restaurants = feed.data?.pages.flatMap((p) => p.restaurants) ?? [];
+  if (!wantWhole && feed.data && !feed.isPlaceholderData) setWantWhole(true);
   const facets = useQuery({ ...facetsQuery(group?.id), subscribed: active }).data;
 
   // Infinite scroll. Re-observe whenever a page lands so a sentinel that is
@@ -139,7 +151,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
       </div>
 
       {/* The list */}
-      <div className={`relative mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 px-5 pt-[18px] transition-opacity md:grid-cols-2 ${feed.isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className={`relative mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 px-5 pt-[18px] transition-opacity md:grid-cols-2 ${feed.isPlaceholderData && !preview ? "opacity-60" : ""}`}>
         {feed.isPending ? (
           [0, 1, 2, 3].map((i) => <RestaurantCardSkeleton key={i} />)
         ) : feed.isError && restaurants.length === 0 ? (
