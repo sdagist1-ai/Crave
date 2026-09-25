@@ -336,15 +336,22 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(() => window.location.hash.includes("type=recovery"));
+  const [isRecoveryMode, setIsRecoveryMode] = useState(() =>
+    window.location.hash.includes("type=recovery") && window.location.hash.includes("access_token="));
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const hasBooted = useRef(false);
 
   useEffect(() => {
     // Lock orientation to vertical (portrait) for native mobile
     ScreenOrientation.lock({ orientation: "portrait" }).catch(() => { });
 
+    // Reset links (older emails and app versions before 1.4; newer ones use a code).
     const processHash = async (hash: string) => {
-      if (hash.includes("access_token=") && hash.includes("type=recovery")) {
+      if (hash.includes("error_code=")) {
+        // e.g. an expired or already-used link: explain instead of showing "New password".
+        setAuthNotice("That reset link has expired. Tap “Forgot password?” to get a code instead.");
+        window.location.hash = "";
+      } else if (hash.includes("access_token=") && hash.includes("type=recovery")) {
         const params = new URLSearchParams(hash.replace('#', '?'));
         const access_token = params.get("access_token");
         const refresh_token = params.get("refresh_token");
@@ -353,8 +360,6 @@ export default function App() {
           setIsRecoveryMode(true);
           window.location.hash = "";
         }
-      } else if (hash.includes("type=recovery")) {
-        setIsRecoveryMode(true);
       }
     };
 
@@ -378,7 +383,7 @@ export default function App() {
     const deepLinkListener = CapacitorApp.addListener('appUrlOpen', data => {
       const shared = parseShareLink(data.url);
       if (shared) receiveShare(shared);
-      else if (data.url.includes("type=recovery")) {
+      else if (data.url.includes("type=recovery") || data.url.includes("error_code=")) {
         const urlObj = new URL(data.url);
         processHash(urlObj.hash);
       }
@@ -439,7 +444,7 @@ export default function App() {
             ) : session ? (
               <CraveApp key={session.user.id} uid={session.user.id} />
             ) : (
-              <AuthScreen />
+              <AuthScreen notice={authNotice} key={authNotice ?? "auth"} />
             )}
           </Suspense>
         </div>
