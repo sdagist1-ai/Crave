@@ -119,21 +119,53 @@ function CraveApp({ uid }: { uid: string }) {
         pending.clear();
       }, 400);
     };
+    // Realtime can't filter deletes (they only carry the row id) and sends every
+    // one, so only refetch when the deleted place is one we're showing.
+    const onRestaurantDeleted = (id: unknown) => {
+      if (typeof id !== "string") return;
+      const cached = JSON.stringify(queryClient.getQueriesData({ queryKey: ["restaurants"] }));
+      if (cached.includes(id)) invalidate("restaurants", "groups");
+    };
 
+    let subscribedBefore = false;
     const channel = supabase.channel(`crave-sync-${groupId ?? "none"}`)
       .on("postgres_changes", {
-        event: "*", schema: "public", table: "restaurants",
+        event: "INSERT", schema: "public", table: "restaurants",
         ...(groupId ? { filter: `group_id=eq.${groupId}` } : {}),
       }, () => invalidate("restaurants", "groups"))
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "restaurants",
+        ...(groupId ? { filter: `group_id=eq.${groupId}` } : {}),
+      }, () => invalidate("restaurants", "groups"))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "restaurants" },
+        (payload) => onRestaurantDeleted(payload.old?.id))
       .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => invalidate("restaurants", "groups"))
       .on("postgres_changes", { event: "*", schema: "public", table: "groups" }, () => invalidate("groups"))
       .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => invalidate("groups", "restaurants"))
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => invalidate("groups", "restaurants"))
-      .subscribe();
+      .subscribe((status) => {
+        // Rejoined after the connection dropped: fetch whatever changed in between.
+        if (status !== "SUBSCRIBED") return;
+        if (subscribedBefore) invalidate("restaurants", "groups");
+        subscribedBefore = true;
+      });
+
+    // iOS suspends the app in the background (e.g. while saving from Maps with the
+    // share sheet), so events are missed and the 5-minute cache would keep showing
+    // the old list. Refetch whenever Crave comes back on screen.
+    const resumed = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) invalidate("restaurants", "groups");
+    });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") invalidate("restaurants", "groups");
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       clearTimeout(timer);
       supabase.removeChannel(channel);
+      resumed.then((l) => l.remove()).catch(() => {});
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [queryClient, groupId]);
 

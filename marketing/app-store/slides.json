@@ -192,5 +192,16 @@
         }
       ]
     }
+  },
+  {
+    "file": "6_Save_From_Maps",
+    "screen": "6-share",
+    "eyebrow": "SAVE FROM MAPS",
+    "title": "Spotted it? Save it.",
+    "sub": "Share any spot from Apple Maps or Google Maps straight to your Cravelist. No app switching.",
+    "chip": "📍  Shared from Maps",
+    "chipAt": "left",
+    "status": "photo",
+    "chipY": 1420
   }
 ]
