@@ -239,7 +239,16 @@ async function expandShortLink(start: URL): Promise<URL | null> {
     }
     if (!isShortLink(url)) return url;
 
-    const res = await fetch(url, { redirect: "manual", headers: { "User-Agent": "curl/8.7.1", Accept: "*/*" } });
+    // Google Maps mints a new short link when Share is tapped, and it 404s for the
+    // first second or two; retry a new-looking 404 for up to ~4s before giving up.
+    let res = await fetch(url, { redirect: "manual", headers: { "User-Agent": "curl/8.7.1", Accept: "*/*" } });
+    for (const wait of /goo\.gl$/i.test(url.hostname) ? [700, 1300, 2000] : []) {
+      if (res.status !== 404) break;
+      await res.body?.cancel();
+      hops.push(`404 ${url.hostname}, retry`);
+      await new Promise((r) => setTimeout(r, wait));
+      res = await fetch(url, { redirect: "manual", headers: { "User-Agent": "curl/8.7.1", Accept: "*/*" } });
+    }
     hops.push(`${res.status} ${url.hostname}`);
     const next = res.headers.get("location");
     if (next) {
