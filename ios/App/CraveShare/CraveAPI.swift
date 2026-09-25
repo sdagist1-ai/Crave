@@ -211,6 +211,8 @@ final class CraveAPI {
         if status == 401 { throw CraveError.notSignedIn }
         // Unique (group_id, place_id): the place is already on this list.
         if status == 409 || String(data: data, encoding: .utf8)?.contains("23505") == true { throw CraveError.alreadySaved }
+        // resolve_share: the link and text didn't name a place.
+        if status == 422 { throw CraveError.server("Couldn't tell which place that is. Open Crave to search for it.") }
         throw CraveError.server("Something went wrong (\(status)). Try again, or open Crave.")
     }
 
