@@ -49,6 +49,13 @@ from that version. `--dry-run` builds and zips without uploading.
 - **Crash reports:** `select * from ota_crash_logs order by created_at desc` (service role
   or the Supabase dashboard).
 
+## History
+
+- Builds 1.4 (7) and (8) have the plugin linked but never registered: Capacitor's automatic
+  lookup by class name didn't find it ("plugin is not implemented on ios"), so they can't
+  receive live updates. From build 9, `ios/App/App/MainViewController.swift` registers it by
+  hand. Failed checks are reported to `ota_crash_logs` ("update check failed at <stage>").
+
 ## When the native app changes
 
 `MIN_NATIVE_BUILD` in `src/config/version.ts` is the oldest App Store build the current code
