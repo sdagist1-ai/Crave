@@ -1,15 +1,16 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Share } from "@capacitor/share";
-import { Camera, Check, Copy, Link2, Loader2, LogOut, Pencil, Plus, Settings, Share2, Trash2 } from "lucide-react";
+import { Camera, Check, Copy, Ellipsis, Link2, Loader2, LogOut, Pencil, Plus, Settings, Share2, Trash2 } from "lucide-react";
 import type { Group, Profile } from "../types";
 import { supabase } from "../lib/supabase";
 import { fetchMyStats } from "../lib/groups";
 import { uploadAvatar } from "../lib/images";
 import { inviteLink } from "../lib/invites";
+import { displayName } from "../utils/people";
 import { Avatar, AvatarStack, Glow, PageTitle, PrimaryButton, Sheet, TextField } from "../components/ui";
 
-type SheetId = null | "settings" | "edit-name" | "join" | "create" | "delete" | { invite: Group };
+type SheetId = null | "settings" | "edit-name" | "join" | "create" | "delete" | { invite: Group } | { manage: string };
 
 export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active = true }: {
   uid: string;
@@ -96,12 +97,17 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
         <section className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface p-4">
           <div className="flex items-center gap-3.5">
             <div className="relative shrink-0">
-              <span className="block rounded-full border-[3px] border-accent p-0.5">
-                <Avatar person={me ?? { id: uid, first_name: null, last_name: null, avatar_url: null }} size={54} />
+              {/* A thin accent ring with a clean gap, like a story ring. */}
+              {/* flex, not block: an inline avatar in a block adds line-height below it and
+                  stretches the ring into an oval. */}
+              <span className="flex rounded-full bg-[conic-gradient(from_210deg,#ff453a,#ff8a65,#ff453a)] p-[2px]">
+                <span className="flex rounded-full bg-surface p-[3px]">
+                  <Avatar person={me ?? { id: uid, first_name: null, last_name: null, avatar_url: null }} size={54} />
+                </span>
               </span>
               <button type="button" onClick={() => fileInput.current?.click()} aria-label="Change photo"
-                className="absolute -right-1 -bottom-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-ink text-white">
-                {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                className="absolute right-0 bottom-0 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-ink text-white shadow-[0_0_0_2.5px_var(--color-surface)] transition-transform active:scale-95">
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} strokeWidth={2.4} />}
               </button>
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -150,9 +156,9 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
                   {active && (
                     <span className="rounded-full bg-accent px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-white">ACTIVE</span>
                   )}
-                  <button type="button" onClick={() => setSheet({ invite: g })} aria-label={`Invite people to ${g.name}`}
+                  <button type="button" onClick={() => setSheet({ manage: g.id })} aria-label={`Members and settings for ${g.name}`}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface">
-                    <Link2 size={17} />
+                    <Ellipsis size={17} />
                   </button>
                 </li>
               );
@@ -239,7 +245,12 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
         />
       )}
 
-      {sheet && typeof sheet === "object" && <InviteSheet group={sheet.invite} onClose={close} />}
+      {sheet && typeof sheet === "object" && "invite" in sheet && <InviteSheet group={sheet.invite} onClose={close} />}
+      {sheet && typeof sheet === "object" && "manage" in sheet && (() => {
+        // Looked up live so the member list updates after a removal; gone once deleted.
+        const g = groups.find((x) => x.id === sheet.manage);
+        return g ? <ListSheet group={g} uid={uid} onInvite={() => setSheet({ invite: g })} onClose={close} /> : null;
+      })()}
 
       {sheet === "delete" && (
         <Sheet title="Delete your account?" onClose={close}>
@@ -320,6 +331,107 @@ function CodeSheet({ title, label, placeholder, cta, busy, error, onClose, onSub
           {busy && <Loader2 size={18} className="animate-spin" />} {cta}
         </PrimaryButton>
       </form>
+    </Sheet>
+  );
+}
+
+type ListAction = { kind: "remove"; person: Profile } | { kind: "leave" } | { kind: "delete" };
+
+/** A list's members and settings. Anyone can invite or leave; its creator can also
+ *  remove members and delete the list. */
+function ListSheet({ group, uid, onInvite, onClose }: {
+  group: Group; uid: string; onInvite: () => void; onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const isCreator = group.created_by === uid;
+  const [confirm, setConfirm] = useState<ListAction | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // The creator first, then you, then everyone else.
+  const members = [...group.members].sort((a, b) =>
+    Number(b.id === group.created_by) - Number(a.id === group.created_by) || Number(b.id === uid) - Number(a.id === uid));
+
+  const run = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    setError(null);
+    const { data, error } = confirm.kind === "delete"
+      ? await supabase.from("groups").delete().eq("id", group.id).select("id")
+      : await supabase.from("group_members").delete()
+          .eq("group_id", group.id).eq("user_id", confirm.kind === "remove" ? confirm.person.id : uid).select("user_id");
+    setBusy(false);
+    if (error || !data?.length) {
+      setError("That didn't work. Check your connection and try again.");
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["groups"] });
+    queryClient.invalidateQueries({ queryKey: ["restaurants"] });
+    if (confirm.kind === "remove") setConfirm(null);
+    else onClose();
+  };
+
+  const prompt = !confirm ? null
+    : confirm.kind === "remove" ? {
+        text: `Remove ${displayName(confirm.person)} from ${group.name}? They lose access to the list; places they added stay. They could rejoin with the invite code, so reset it from Invite if you don't want that.`,
+        cta: "Remove",
+      }
+    : confirm.kind === "leave" ? {
+        text: `Leave ${group.name}? You lose access to it; places you added stay for everyone else.`,
+        cta: "Leave",
+      }
+    : {
+        text: `Delete ${group.name} for everyone? Its ${group.place_count} ${group.place_count === 1 ? "place is" : "places are"} removed for ${group.members.length === 1 ? "you" : group.members.length === 2 ? "both of you" : `all ${group.members.length} members`}. Reviews stay with the people who wrote them.`,
+        cta: "Delete list",
+      };
+
+  return (
+    <Sheet title={group.name} onClose={onClose}>
+      <h3 className="m-0 mb-2 font-mono text-[10px] tracking-[0.14em] text-muted uppercase">
+        {group.members.length} {group.members.length === 1 ? "member" : "members"}
+      </h3>
+      <ul className="m-0 mb-5 flex list-none flex-col gap-1 p-0">
+        {members.map((m) => (
+          <li key={m.id} className="flex min-h-12 items-center gap-3">
+            <Avatar person={m} size={36} />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-[15px] font-semibold">
+                {[m.first_name, m.last_name].filter(Boolean).join(" ") || "Someone"}{m.id === uid && <span className="font-normal text-muted"> (you)</span>}
+              </span>
+              {m.id === group.created_by && <span className="text-xs text-muted">Created the list</span>}
+            </span>
+            {isCreator && m.id !== uid && (
+              <button type="button" onClick={() => { setError(null); setConfirm({ kind: "remove", person: m }); }}
+                className="h-9 shrink-0 rounded-full border border-border px-3.5 text-[13px] font-semibold text-danger">
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {prompt ? (
+        <div className="mb-2 flex flex-col gap-3 rounded-[20px] bg-subtle p-4 animate-fade-in">
+          <p className="m-0 text-sm text-ink-2">{prompt.text}</p>
+          {error && <p role="alert" className="m-0 text-sm font-medium text-danger">{error}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setConfirm(null); setError(null); }} disabled={busy}
+              className="h-12 flex-1 rounded-2xl border border-border bg-surface text-[15px] font-semibold">Cancel</button>
+            <button type="button" onClick={run} disabled={busy}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-danger text-[15px] font-semibold text-white disabled:opacity-60">
+              {busy && <Loader2 size={16} className="animate-spin" />} {prompt.cta}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 pb-2">
+          <SheetAction icon={<Link2 size={18} />} onClick={onInvite}>Invite people</SheetAction>
+          {isCreator ? (
+            <SheetAction icon={<Trash2 size={18} />} onClick={() => { setError(null); setConfirm({ kind: "delete" }); }} danger>Delete list</SheetAction>
+          ) : (
+            <SheetAction icon={<LogOut size={18} />} onClick={() => { setError(null); setConfirm({ kind: "leave" }); }} danger>Leave list</SheetAction>
+          )}
+        </div>
+      )}
     </Sheet>
   );
 }
