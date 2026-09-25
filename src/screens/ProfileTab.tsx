@@ -6,6 +6,7 @@ import type { Group, Profile } from "../types";
 import { supabase } from "../lib/supabase";
 import { fetchMyStats } from "../lib/groups";
 import { uploadAvatar } from "../lib/images";
+import { inviteLink } from "../lib/invites";
 import { Avatar, AvatarStack, Glow, PageTitle, PrimaryButton, Sheet, TextField } from "../components/ui";
 
 type SheetId = null | "settings" | "edit-name" | "join" | "create" | "delete" | { invite: Group };
@@ -327,7 +328,9 @@ function InviteSheet({ group, onClose }: { group: Group; onClose: () => void }) 
   // Reset takes two taps: the old code stops working for anyone who hasn't joined yet.
   const [resetStep, setResetStep] = useState<"idle" | "confirm" | "busy">("idle");
   const [resetError, setResetError] = useState<string | null>(null);
-  const message = `Join "${group.name}" on Crave — open the app, tap Profile → Join with code, and enter ${code}`;
+  // The link opens Crave and joins (or the website's join page, which leads to the
+  // App Store); the code is there for typing it in by hand.
+  const message = `Join "${group.name}" on Crave 👉 ${inviteLink(code)}\n\nOr open Crave → Profile → Join with code: ${code}`;
 
   const copy = async () => {
     try {

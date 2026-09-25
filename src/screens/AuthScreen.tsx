@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "../lib/supabase";
+import { usePendingInvite } from "../lib/invites";
 import { Glow, PrimaryButton, TextField } from "../components/ui";
 
 // Auth emails link back into the app: the custom URL scheme on iOS, or the
@@ -19,7 +20,9 @@ export function AuthScreen({ notice }: { notice?: string | null }) {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const invite = usePendingInvite();
+  // Someone arriving from an invite link without a saved email is most likely new.
+  const [isSignUp, setIsSignUp] = useState(() => !!invite && !localStorage.getItem("crave_last_email"));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(notice ?? null);
   const [message, setMessage] = useState<string | null>(null);
@@ -182,6 +185,13 @@ export function AuthScreen({ notice }: { notice?: string | null }) {
             {isSignUp ? "Create an account to start saving spots." : "Sign in to pick up where you left off."}
           </p>
         </div>
+
+        {invite && (
+          <div role="status" className="-mt-4 mb-2 rounded-2xl border border-accent/30 bg-accent-tint px-4 py-3 text-[15px] text-ink">
+            <span className="font-semibold">You've been invited to a Cravelist.</span>{" "}
+            {isSignUp ? "Create your account and you'll join it right away." : "Sign in and you'll join it right away."}
+          </div>
+        )}
 
         {isSignUp && (
           <div className="flex gap-3 animate-rise">

@@ -91,10 +91,6 @@ generic AI recommendations.
 
 ## Growth
 
-- **Invite links** that auto-join: `<site>/join/CODE` opens the app via Universal Links
-  (needs the site domain, `apple-app-site-association`, and the Associated Domains
-  capability); without the app, a join page copies the invite so the app can offer
-  "Join Bae & I?" right after sign-up.
 - **Ask for an App Store rating at a happy moment** (after rating a place 9+).
 
 ## Smaller ideas
