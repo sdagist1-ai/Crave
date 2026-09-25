@@ -4,5 +4,5 @@ export const WEB_VERSION = "1.4.0";
 
 // The oldest App Store build (CFBundleVersion) this code runs on. Bump it when you add
 // or change a native plugin, so older installs don't receive code that needs it.
-// Build 7 is the first with the live-update plugin.
-export const MIN_NATIVE_BUILD = 7;
+// Build 8 is the first with the live-update plugin (build 7 was archived from older code).
+export const MIN_NATIVE_BUILD = 8;
