@@ -116,7 +116,63 @@
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
 .bottom-safe { bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
 
+/* ─── Motion: tabs, loading, arrival ─────────────────────────────────────────
+   Tabs stay mounted (keeps scroll and data) and hand over with a short shared-axis
+   move: the new tab glides in from the side it's on in the tab bar while the old
+   one drifts the other way and fades. Hidden tabs end at visibility: hidden, so
+   they aren't painted. Nothing inside a panel may transition `visibility` (no
+   `transition-all`), or it lingers over the next tab. */
+.tab-panel {
+  transition: opacity 200ms ease-out, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+}
+.tab-panel[data-state="hidden"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 140ms ease-in, transform 220ms cubic-bezier(0.4, 0, 1, 1), visibility 0s linear 220ms;
+}
+.tab-panel[data-state="hidden"][data-side="before"] { transform: translate3d(-22px, 0, 0); }
+.tab-panel[data-state="hidden"][data-side="after"] { transform: translate3d(22px, 0, 0); }
+
+/* Placeholders: a soft band of light sweeps across, instead of a grey pulse. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-subtle);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.75) 50%, transparent 80%);
+  animation: skeleton-sweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes skeleton-sweep { to { transform: translateX(100%) } }
+
+/* Content arriving: each item settles in a beat after the one before it. */
+.arrive {
+  animation: arrive 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 45ms);
+}
+/* Passport stamps land like a stamp being pressed down. */
+.stamp-in {
+  animation: stamp-in 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 70ms + 60ms);
+}
+@keyframes stamp-in {
+  0% { opacity: 0; transform: scale(1.25); }
+  55% { opacity: 1; transform: scale(0.95); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes arrive {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .tab-panel[data-state="hidden"] { transform: none !important; }
+  .skeleton::after { animation: none; }
   *, *::before, *::after {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;

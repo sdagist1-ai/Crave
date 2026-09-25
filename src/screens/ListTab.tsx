@@ -161,8 +161,10 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
           )
         ) : (
           <>
-            {restaurants.map((r) => (
-              <RestaurantCard key={r.id} restaurant={r} memberCount={memberCount} onOpen={onOpen} />
+            {restaurants.map((r, i) => (
+              <div key={r.id} className="arrive" style={{ "--i": i } as React.CSSProperties}>
+                <RestaurantCard restaurant={r} memberCount={memberCount} onOpen={onOpen} />
+              </div>
             ))}
             <div ref={sentinel} className="flex h-10 items-center justify-center md:col-span-2" aria-hidden="true">
               {feed.isFetchingNextPage && <Loader2 size={18} className="animate-spin text-muted" />}

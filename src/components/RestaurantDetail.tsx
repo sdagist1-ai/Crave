@@ -182,7 +182,7 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
               <div className="text-[15px] font-semibold">{ratedLabel}</div>
               <div className="h-1.5 overflow-hidden rounded-full bg-subtle" role="progressbar"
                 aria-valuemin={0} aria-valuemax={memberCount} aria-valuenow={scored.length} aria-label="Members who rated">
-                <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${Math.min(100, (scored.length / memberCount) * 100)}%` }} />
+                <div className="h-1.5 rounded-full bg-accent transition-[width]" style={{ width: `${Math.min(100, (scored.length / memberCount) * 100)}%` }} />
               </div>
               <div className="text-xs text-muted">{rangeLabel}</div>
             </div>

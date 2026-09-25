@@ -14,7 +14,7 @@ export function ScoreRating({ value, onChange }: { value: number; onChange: (v: 
             aria-checked={selected}
             aria-label={`${n} out of 10`}
             onClick={() => onChange(n)}
-            className={`h-12 rounded-2xl font-mono text-base font-semibold transition-all active:scale-95 ${
+            className={`h-12 rounded-2xl font-mono text-base font-semibold transition-[background-color,color,box-shadow,transform] active:scale-95 ${
               selected
                 ? n >= MUST_SCORE ? "bg-accent text-white shadow-accent" : "bg-ink text-white"
                 : "border border-border bg-surface text-ink-2"
