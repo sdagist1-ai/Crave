@@ -44,7 +44,7 @@ final class ShareViewController: UIViewController {
         // "+" is legal in a query but the app reads it as a space; Google place links use it.
         components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
 
-        if let target = components.url { await openContainingApp(target) }
+        if let target = components.url { openContainingApp(target) }
         extensionContext?.completeRequest(returningItems: nil)
     }
 
