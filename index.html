@@ -10,6 +10,8 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Crave</title>
+    <!-- Start the TLS handshake with Supabase while the app's code loads. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
   </head>
   <body>
     <div id="root"></div>

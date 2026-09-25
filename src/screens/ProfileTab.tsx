@@ -11,11 +11,13 @@ import { Avatar, AvatarStack, Glow, PageTitle, PrimaryButton, Sheet, TextField }
 
 type SheetId = null | "settings" | "edit-name" | "join" | "create" | "delete" | { invite: Group };
 
-export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup }: {
+export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active = true }: {
   uid: string;
   groups: Group[];
   activeGroupId: string | undefined;
   onSelectGroup: (id: string) => void;
+  /** On screen now (hidden tabs don't refetch). */
+  active?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [sheet, setSheet] = useState<SheetId>(null);
@@ -31,8 +33,9 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup }: {
       if (error) throw error;
       return data;
     },
+    subscribed: active,
   });
-  const stats = useQuery({ queryKey: ["restaurants", "my-stats", uid], queryFn: fetchMyStats });
+  const stats = useQuery({ queryKey: ["restaurants", "my-stats", uid], queryFn: fetchMyStats, subscribed: active });
 
   const me = profile.data;
   const since = stats.data?.member_since ?? me?.created_at;

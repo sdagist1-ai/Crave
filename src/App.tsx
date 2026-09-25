@@ -7,7 +7,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "./lib/supabase";
-import { fetchRestaurants } from "./lib/restaurants";
+import { DEFAULT_FEED, feedQuery, fetchRestaurants } from "./lib/restaurants";
 import { fetchMyGroups } from "./lib/groups";
 import { parseShareLink, receiveShare, useIncomingShare, type SharedPlace } from "./lib/shareInbox";
 import { publishForShareExtension, SHARED_KEYS } from "./lib/sharedStore";
@@ -96,6 +96,12 @@ function CraveApp({ uid }: { uid: string }) {
   const [storedGroupId, setStoredGroupId] = useState<string | null>(readStoredGroup);
 
   const groupsQuery = useQuery({ queryKey: ["groups", uid], queryFn: fetchMyGroups });
+  // Start the list's first page alongside "my lists" instead of after it (saves a
+  // round trip at launch). Uses the list opened last time; skipped if it's cached.
+  const [launchGroupId] = useState(storedGroupId);
+  useEffect(() => {
+    if (launchGroupId) void queryClient.prefetchInfiniteQuery(feedQuery(uid, launchGroupId, DEFAULT_FEED));
+  }, [queryClient, uid, launchGroupId]);
   const groups = groupsQuery.data ?? [];
   // Fall back to the first list if the stored one was left or deleted.
   const group = groups.find((g) => g.id === storedGroupId) ?? groups[0];
@@ -318,12 +324,12 @@ function CraveApp({ uid }: { uid: string }) {
       {inviteNotice && <InviteNotice {...inviteNotice} />}
       {tabPanel("list", (
         <ListTab uid={uid} group={group} groups={groups} onSelectGroup={selectGroup}
-          onAdd={(q) => setAddQuery(q ?? "")} onOpen={setDetail} />
+          onAdd={(q) => setAddQuery(q ?? "")} onOpen={setDetail} active={activeTab === "list"} />
       ))}
-      {tabPanel("passport", <PassportTab uid={uid} group={group} onOpen={setDetail} />)}
-      {tabPanel("spin", <SpinTab uid={uid} groupId={groupId} onOpen={setDetail} />)}
+      {tabPanel("passport", <PassportTab uid={uid} group={group} onOpen={setDetail} active={activeTab === "passport"} />)}
+      {tabPanel("spin", <SpinTab uid={uid} groupId={groupId} onOpen={setDetail} active={activeTab === "spin"} />)}
       {tabPanel("profile", (
-        <ProfileTab uid={uid} groups={groups} activeGroupId={groupId} onSelectGroup={selectGroup} />
+        <ProfileTab uid={uid} groups={groups} activeGroupId={groupId} onSelectGroup={selectGroup} active={activeTab === "profile"} />
       ))}
 
       <BottomTabBar active={activeTab} onChange={changeTab} />

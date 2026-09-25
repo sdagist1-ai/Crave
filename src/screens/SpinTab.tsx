@@ -29,7 +29,11 @@ function randomIndex(n: number) {
   return Math.floor((buf[0] / 0x1_0000_0000) * n);
 }
 
-export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string | undefined; onOpen: (r: Restaurant) => void }) {
+export function SpinTab({ uid, groupId, onOpen, active = true }: {
+  uid: string; groupId: string | undefined; onOpen: (r: Restaurant) => void;
+  /** On screen now (hidden tabs don't refetch). */
+  active?: boolean;
+}) {
   const [mode, setMode] = useState<Mode>("new");
   const [category, setCategory] = useState<string | null>(null);
   const [vibes, setVibes] = useState<string[]>([]);
@@ -52,6 +56,7 @@ export function SpinTab({ uid, groupId, onOpen }: { uid: string; groupId: string
       filterCategory: category, filterVibes: vibes, all: true,
     })).restaurants,
     enabled: !!groupId,
+    subscribed: active,
   });
   const places = pool.data ?? [];
 

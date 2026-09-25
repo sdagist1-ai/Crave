@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, Loader2, Plus, SlidersHorizontal } from "lucide-react";
 import type { Group, Restaurant, SortOption } from "../types";
-import { fetchRestaurants } from "../lib/restaurants";
+import { feedQuery } from "../lib/restaurants";
 import { CATEGORIES, SORT_LABELS, VIBE_OPTIONS } from "../constants/theme";
 import { RestaurantCard, RestaurantCardSkeleton } from "../components/RestaurantCard";
 import { AvatarStack, Eyebrow, FilterChip, Glow, PrimaryButton, Segmented, Sheet } from "../components/ui";
 
 type Tab = "cravelist" | "tried";
 
-export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
+export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, active = true }: {
   uid: string;
   group: Group | undefined;
   groups: Group[];
@@ -17,6 +17,8 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
   /** Open "add a place", optionally pre-filled with a search */
   onAdd: (query?: string) => void;
   onOpen: (r: Restaurant) => void;
+  /** On screen now (hidden tabs don't refetch). */
+  active?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("cravelist");
   const [category, setCategory] = useState<string | null>(null);
@@ -26,15 +28,11 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen }: {
   const [showFilters, setShowFilters] = useState(false);
 
   const feed = useInfiniteQuery({
-    queryKey: ["restaurants", "feed", uid, group?.id, tab, category, vibes, sort],
-    queryFn: ({ pageParam }) => fetchRestaurants({
-      uid, groupId: group!.id, pageParam, filterTab: tab, filterCategory: category,
-      filterVibes: vibes, sortBy: sort,
-    }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor,
+    ...feedQuery(uid, group?.id, { tab, category, vibes, sort }),
     enabled: !!group,
     placeholderData: keepPreviousData,
+    // Hidden tabs keep their data but don't refetch; they catch up when shown.
+    subscribed: active,
   });
   const restaurants = feed.data?.pages.flatMap((p) => p.restaurants) ?? [];
 
