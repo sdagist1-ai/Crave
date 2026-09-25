@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
 import { MUST_SCORE, type Profile } from "../types";
 import { initials } from "../utils/people";
 import { formatScore } from "../utils/helpers";
@@ -199,6 +198,9 @@ export function Sheet({ title, onClose, children, labelledBy }: {
   labelledBy?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  useEffect(() => { close.current = onClose; });
 
   useEffect(() => {
     // Capture phase + stopPropagation: Escape closes only the top-most sheet,
@@ -213,9 +215,80 @@ export function Sheet({ title, onClose, children, labelledBy }: {
     return () => document.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
+  // Swipe down to close, like a native sheet. The sheet follows the finger once it's
+  // scrolled to the top and the finger moves down; a long or quick swipe closes it,
+  // a short one springs back. Touch events, since the browser claims pointer events
+  // for scrolling.
+  useEffect(() => {
+    const el = panel.current;
+    const bg = backdrop.current;
+    if (!el || !bg) return;
+    let startX = 0, startY = 0, lastY = 0, lastT = 0, velocity = 0, offset = 0;
+    let tracking = false, dragging = false;
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      tracking = true;
+      dragging = false;
+      startX = e.touches[0].clientX;
+      startY = lastY = e.touches[0].clientY;
+      lastT = e.timeStamp;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      const y = e.touches[0].clientY;
+      if (!dragging) {
+        const moved = y - startY;
+        const sideways = Math.abs(e.touches[0].clientX - startX);
+        if (Math.abs(moved) < 6 && sideways < 6) return;
+        // Scrolling the sheet's content, dragging up or sideways (a slider, a chip row)
+        // isn't a dismiss.
+        if (moved <= sideways || el.scrollTop > 0) { tracking = false; return; }
+        dragging = true;
+        startY = y;
+        el.style.animation = "none";
+        el.style.transition = "none";
+        bg.style.transition = "none";
+      }
+      e.preventDefault();
+      offset = Math.max(0, y - startY);
+      velocity = (y - lastY) / Math.max(1, e.timeStamp - lastT);
+      lastY = y;
+      lastT = e.timeStamp;
+      el.style.transform = `translate3d(0, ${offset}px, 0)`;
+      bg.style.backgroundColor = `rgba(15, 23, 42, ${0.4 * Math.max(0, 1 - offset / el.offsetHeight)})`;
+    };
+    const onEnd = () => {
+      if (!dragging) { tracking = false; return; }
+      tracking = dragging = false;
+      const ease = "cubic-bezier(0.32, 0.72, 0, 1)";
+      el.style.transition = `transform 280ms ${ease}`;
+      bg.style.transition = `background-color 280ms ${ease}`;
+      if (offset > Math.min(140, el.offsetHeight * 0.3) || (velocity > 0.4 && offset > 24)) {
+        el.style.transform = `translate3d(0, ${el.offsetHeight}px, 0)`;
+        bg.style.backgroundColor = "rgba(15, 23, 42, 0)";
+        window.setTimeout(() => close.current(), 240);
+      } else {
+        el.style.transform = "";
+        bg.style.backgroundColor = "";
+      }
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   // Portalled to <body> so a sheet opened inside a tab always sits above the tab bar.
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/40 animate-fade-in" onClick={onClose}>
+    <div ref={backdrop} className="fixed inset-0 z-[70] flex items-end justify-center bg-ink/40 animate-fade-in" onClick={onClose}>
       <div
         ref={panel}
         role="dialog"
@@ -226,15 +299,11 @@ export function Sheet({ title, onClose, children, labelledBy }: {
         className="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-[28px] bg-surface px-5 pt-3 pb-safe outline-none animate-sheet"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" />
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
+        {/* Swipe down, tap outside or Escape closes it; this is for screen readers. */}
+        <button type="button" onClick={onClose} className="sr-only">Close</button>
         {title && (
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="m-0 font-display text-2xl font-bold tracking-[-0.02em]">{title}</h2>
-            <button type="button" onClick={onClose} aria-label="Close"
-              className="flex h-11 w-11 items-center justify-center rounded-full text-muted active:bg-subtle">
-              <X size={20} />
-            </button>
-          </div>
+          <h2 className="m-0 mb-4 font-display text-2xl font-bold tracking-[-0.02em]">{title}</h2>
         )}
         {children}
       </div>

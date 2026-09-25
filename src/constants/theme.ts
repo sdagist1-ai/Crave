@@ -1,10 +1,10 @@
 import type { SortOption } from "../types";
 
-/** Cuisine groups, in display order (private.cuisine_groups() in the database). The
+/** Cuisine groups, alphabetical (private.cuisine_groups() in the database). The
  *  specific cuisine a place was guessed as (Thai, Nigerian…) is kept as cuisineDetail. */
 export const CUISINES = [
-  "Caribbean", "Latin American", "African", "Asian", "South Asian",
-  "Mediterranean & Middle Eastern", "European", "American",
+  "African", "American", "Asian", "Caribbean", "European", "Latin American",
+  "Mediterranean & Middle Eastern", "South Asian",
 ] as const;
 
 /** Occasion chips, in display order. The database fills these in from Google's types

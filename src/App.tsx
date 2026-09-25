@@ -417,7 +417,7 @@ const persister = createSyncStoragePersister({
 });
 
 // Bump when cached data shapes change so a new build never renders an old cache.
-const CACHE_VERSION = "2026-09-redesign";
+const CACHE_VERSION = "2026-09-cuisines";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
