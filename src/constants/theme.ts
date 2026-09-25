@@ -17,3 +17,10 @@ export const SORT_LABELS: Record<SortOption, string> = {
   score: "My rating",
   visited: "Recently tried",
 };
+
+/** The sorts each tab offers, default first. A Cravelist has no ratings of yours yet;
+ *  Tried places are about how and when you went. */
+export const TAB_SORTS: Record<"cravelist" | "tried", SortOption[]> = {
+  cravelist: ["newest", "rating"],
+  tried: ["visited", "score"],
+};

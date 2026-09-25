@@ -89,15 +89,7 @@ generic AI recommendations.
    often as it likes, so a scripted abuser could run up Places charges.
    - Now, no code: a daily quota cap on the Places API and a budget alert in Google Cloud.
    - Then: a per-user rate limit in the `places` function.
-2. **Keep reviews inside shared lists.** Today anyone who shares *any* list with you can
-   read all your reviews and notes through the API, including places on lists they aren't
-   in (the app doesn't show them). Tighten the `reviews` SELECT policy so a review is
-   readable only when the reader is on a list that has that place.
-3. **Narrow what members can edit on a place.** Members can update any column of their
-   list's places (name, who added it, `photo_url`, which could point at an outside server
-   and see members' IP addresses). Grant UPDATE only on the columns the app edits, keeping
-   what app 1.3 writes working.
-4. **Review photos are public links** (random names, but anyone with a link can open
+2. **Review photos are public links** (random names, but anyone with a link can open
    them). Switch to signed URLs if that becomes a concern.
 
 The advisor's "SECURITY DEFINER function executable" warnings (create_group,
