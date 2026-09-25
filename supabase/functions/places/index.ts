@@ -201,12 +201,60 @@ async function backfillLocations(req: Request) {
 }
 
 // Only map links are ever fetched (to expand Google's short links), never arbitrary URLs.
-const MAP_HOST = /^(maps\.app\.goo\.gl|goo\.gl|(www\.)?google\.[a-z.]+|maps\.google\.[a-z.]+|maps\.apple\.com|maps\.apple)$/i;
+const MAP_HOST = /^(maps\.app\.goo\.gl|goo\.gl|(www\.)?google\.[a-z.]+|maps\.google\.[a-z.]+|consent\.google\.[a-z.]+|maps\.apple\.com|maps\.apple)$/i;
 
 function coord(lat: unknown, lng: unknown) {
   const a = Number(lat), b = Number(lng);
   return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180 && (a || b)
     ? { lat: a, lng: b } : null;
+}
+
+const isShortLink = (u: URL) => /(^|\.)goo\.gl$/i.test(u.hostname) || /^maps\.apple$/i.test(u.hostname) ||
+  (/^maps\.apple\.com$/i.test(u.hostname) && u.pathname.startsWith("/p/"));
+
+/** A Google Maps link found inside an interstitial page (HTML, maybe with JSON escapes). */
+function mapsLinkIn(html: string): URL | null {
+  const found = html
+    .replace(/\\u0026/gi, "&").replace(/\\u003d/gi, "=").replace(/\\\//g, "/").replace(/&amp;/g, "&")
+    .match(/https:\/\/(?:www\.google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)[^"'<>\s\\]*/i);
+  try { return found ? new URL(found[0]) : null; } catch { return null; }
+}
+
+/**
+ * Follows a map short link to the full place link. Google sometimes answers servers with
+ * a consent or "unusual traffic" page that carries the real link in ?continue=, or with
+ * a page that links to it instead of redirecting; both are unwrapped here.
+ */
+async function expandShortLink(start: URL): Promise<URL | null> {
+  let url: URL | null = start;
+  const hops: string[] = [];
+  for (let i = 0; url && i < 6; i++) {
+    const wrapped = /^(consent|www)\.google\./i.test(url.hostname) && /^\/(sorry|ml|$)/.test(url.pathname)
+      ? url.searchParams.get("continue") : null;
+    if (wrapped) {
+      try { url = new URL(wrapped); } catch { return null; }
+      hops.push("continue");
+      if (!MAP_HOST.test(url.hostname)) return null;
+      continue;
+    }
+    if (!isShortLink(url)) return url;
+
+    const res = await fetch(url, { redirect: "manual", headers: { "User-Agent": "curl/8.7.1", Accept: "*/*" } });
+    hops.push(`${res.status} ${url.hostname}`);
+    const next = res.headers.get("location");
+    if (next) {
+      await res.body?.cancel();
+      url = new URL(next, url);
+    } else {
+      url = res.ok ? mapsLinkIn((await res.text()).slice(0, 300_000)) : null;
+    }
+    if (url && !MAP_HOST.test(url.hostname)) {
+      hops.push(`off-map ${url.hostname}`);
+      url = null;
+    }
+  }
+  if (!url || isShortLink(url)) console.warn("resolve_share: short link didn't expand", { hops });
+  return url && !isShortLink(url) ? url : null;
 }
 
 async function resolveShare(rawUrl: unknown, rawText: unknown) {
@@ -218,6 +266,7 @@ async function resolveShare(rawUrl: unknown, rawText: unknown) {
   let name: string | null = lines[0] ?? null;
   let address: string | null = lines[1] ?? null;
   let at: { lat: number; lng: number } | null = null;
+  let expanded = "";
 
   try {
     let url: URL | null = link ? new URL(link) : null;
@@ -225,16 +274,8 @@ async function resolveShare(rawUrl: unknown, rawText: unknown) {
 
     // Short links redirect to the full URL: maps.app.goo.gl/… → google.com/maps/place/…,
     // maps.apple/p/… → maps.apple.com/place?name=…&coordinate=…
-    const isShortLink = (u: URL) => /goo\.gl$/i.test(u.hostname) || /^maps\.apple$/i.test(u.hostname) ||
-      (/^maps\.apple\.com$/i.test(u.hostname) && u.pathname.startsWith("/p/"));
-    for (let hops = 0; url && isShortLink(url) && hops < 5; hops++) {
-      const res = await fetch(url, { redirect: "manual" });
-      await res.body?.cancel();
-      const next = res.headers.get("location");
-      url = next ? new URL(next, url) : null;
-      if (url && !MAP_HOST.test(url.hostname)) url = null;
-    }
-
+    url = url && await expandShortLink(url);
+    if (url) expanded = url.hostname + url.pathname.slice(0, 20) + (url.search ? "?" + [...url.searchParams.keys()].join(",") : "");
     if (url) {
       const q = url.searchParams;
       if (/apple/i.test(url.hostname)) {
@@ -243,11 +284,14 @@ async function resolveShare(rawUrl: unknown, rawText: unknown) {
         const ll = (q.get("coordinate") ?? q.get("ll") ?? q.get("sll") ?? "").split(",");
         at = coord(ll[0], ll[1]);
       } else {
-        const place = url.pathname.match(/\/maps\/place\/([^/]+)/);
+        const place = url.pathname.match(/\/maps\/(?:place|search)\/([^/@]+)/);
+        const asked = q.get("q") ?? q.get("query") ?? q.get("destination");
+        const askedAt = asked?.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
         if (place) name = decodeURIComponent(place[1].replace(/\+/g, " "));
-        else if (q.get("q") ?? q.get("query")) name = q.get("q") ?? q.get("query");
+        else if (askedAt) at = coord(askedAt[1], askedAt[2]);
+        else if (asked) name = asked;
         const pin = url.href.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) ?? url.pathname.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-        if (pin) at = coord(pin[1], pin[2]);
+        if (pin) at = coord(pin[1], pin[2]) ?? at;
       }
     }
   } catch (err) {
@@ -258,7 +302,7 @@ async function resolveShare(rawUrl: unknown, rawText: unknown) {
     // Which kind of link couldn't be read (no query string or text: nothing personal).
     let shape = "none";
     try { if (link) { const u = new URL(link); shape = u.hostname + u.pathname.slice(0, 20); } } catch { shape = "unparseable"; }
-    console.warn("resolve_share: no place in share", { shape, hasText: text.length > 0 });
+    console.warn("resolve_share: no place in share", { shape, expanded, hasText: text.length > 0 });
     return json({ error: "no_place" }, 422);
   }
   // "Lucali, 575 Henry St, Brooklyn" style names already carry the street.

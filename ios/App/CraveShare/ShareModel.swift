@@ -59,10 +59,13 @@ final class ShareModel: ObservableObject {
             _ = try await api.accessToken()
 
             let shared = await payload()
-            async let listsCall = api.myLists()
+            // Lists load alongside the lookup. A plain Task, not `async let`: an `async let`
+            // in this function crashed the extension in the Swift runtime when it returned.
+            let listsTask = Task { try await api.myLists() }
+            defer { listsTask.cancel() }
             let target = try await api.resolveShare(url: shared.url, text: shared.text)
             let results = try await api.search(target.query, near: target)
-            lists = try await listsCall
+            lists = try await listsTask.value
             pickDefaultList()
 
             guard !lists.isEmpty else {
