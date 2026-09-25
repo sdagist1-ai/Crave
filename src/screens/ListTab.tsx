@@ -4,7 +4,7 @@ import { ArrowDownUp, Check, ChevronDown, Loader2, Plus } from "lucide-react";
 import type { Group, Restaurant, SortOption } from "../types";
 import { feedQuery } from "../lib/restaurants";
 import { facetsQuery } from "../lib/cuisines";
-import { SORT_LABELS } from "../constants/theme";
+import { SORT_LABELS, TAB_SORTS } from "../constants/theme";
 import { FilterRow } from "../components/CuisineFilters";
 import { RestaurantCard, RestaurantCardSkeleton } from "../components/RestaurantCard";
 import { AvatarStack, Eyebrow, Glow, PrimaryButton, Segmented, Sheet } from "../components/ui";
@@ -25,7 +25,11 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
   const [tab, setTab] = useState<Tab>("cravelist");
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [occasion, setOccasion] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortOption>("newest");
+  // Each tab keeps its own sort.
+  const [sorts, setSorts] = useState<Record<Tab, SortOption>>({ cravelist: "newest", tried: "visited" });
+  const sort = sorts[tab];
+  const setSort = (s: SortOption) => setSorts({ ...sorts, [tab]: s });
+  const defaultSort = TAB_SORTS[tab][0];
   // Another list has other cuisines and occasions: start it unfiltered.
   const [filtersFor, setFiltersFor] = useState(group?.id);
   if (filtersFor !== group?.id) {
@@ -63,10 +67,10 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
   const memberCount = group?.members.length ?? 1;
   const triedCount = group?.tried_count ?? 0;
   const cravelistCount = (group?.place_count ?? 0) - triedCount;
-  const filtersActive = sort !== "newest";
+  const filtersActive = sort !== defaultSort;
   const anyFilter = filtersActive || cuisines.length > 0 || !!occasion;
 
-  const clearFilters = () => { setCuisines([]); setOccasion(null); setSort("newest"); };
+  const clearFilters = () => { setCuisines([]); setOccasion(null); setSort(defaultSort); };
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden pb-[120px]">
@@ -206,11 +210,11 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
       )}
 
       {showFilters && (
-        <Sheet title="Sort" onClose={() => setShowFilters(false)}>
+        <Sheet title={tab === "cravelist" ? "Sort your Cravelist" : "Sort what you’ve tried"} onClose={() => setShowFilters(false)}>
           <fieldset className="m-0 mb-5 border-0 p-0">
-            <legend className="mb-2 text-[13px] font-medium text-ink-2">Sort by</legend>
+            <legend className="sr-only">Sort by</legend>
             <div className="flex flex-col gap-1">
-              {(Object.keys(SORT_LABELS) as SortOption[]).map((opt) => (
+              {TAB_SORTS[tab].map((opt) => (
                 <label key={opt} className={`flex min-h-12 items-center justify-between rounded-2xl px-4 ${sort === opt ? "bg-accent-tint" : ""}`}>
                   <span className="text-[15px]">{SORT_LABELS[opt]}</span>
                   <input type="radio" name="sort" value={opt} checked={sort === opt} onChange={() => setSort(opt)}
@@ -220,7 +224,7 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
             </div>
           </fieldset>
           <div className="flex gap-2 pb-2">
-            <button type="button" onClick={() => setSort("newest")}
+            <button type="button" onClick={() => setSort(defaultSort)}
               className="h-[54px] flex-1 rounded-[18px] border border-border text-[15px] font-semibold">Reset</button>
             <PrimaryButton onClick={() => setShowFilters(false)} className="flex-1">Done</PrimaryButton>
           </div>
