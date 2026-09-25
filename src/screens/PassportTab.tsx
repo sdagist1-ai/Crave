@@ -28,10 +28,12 @@ function lastVisit(r: Restaurant) {
   return r.visitedAt ?? (dates.length ? dates.sort()[dates.length - 1] : r.createdAt);
 }
 
-export function PassportTab({ uid, group, onOpen }: {
+export function PassportTab({ uid, group, onOpen, active = true }: {
   uid: string;
   group: Group | undefined;
   onOpen: (r: Restaurant) => void;
+  /** On screen now (hidden tabs don't refetch). */
+  active?: boolean;
 }) {
   const [showMap, setShowMap] = useState(false);
   const [showAllStamps, setShowAllStamps] = useState(false);
@@ -40,6 +42,7 @@ export function PassportTab({ uid, group, onOpen }: {
     queryKey: ["restaurants", "passport", uid, group?.id],
     queryFn: async () => (await fetchRestaurants({ uid, groupId: group!.id, all: true })).restaurants,
     enabled: !!group,
+    subscribed: active,
   });
 
   // Places saved before city/country were stored count as 0 Cities/Countries.

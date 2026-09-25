@@ -1,3 +1,4 @@
+import { infiniteQueryOptions } from "@tanstack/react-query";
 import { supabase } from "./supabase";
 import type { Profile, Restaurant, Review, SortOption } from "../types";
 
@@ -134,3 +135,21 @@ export async function fetchRestaurants({
     nextCursor: rows.length === pageSize ? String(offset + pageSize) : null,
   };
 }
+
+/** The list tab's feed query. Shared so launch can start it before the lists load. */
+export function feedQuery(uid: string, groupId: string | undefined, filters: {
+  tab: "cravelist" | "tried"; category: string | null; vibes: string[]; sort: SortOption;
+}) {
+  return infiniteQueryOptions({
+    queryKey: ["restaurants", "feed", uid, groupId, filters.tab, filters.category, filters.vibes, filters.sort],
+    queryFn: ({ pageParam }) => fetchRestaurants({
+      uid, groupId: groupId ?? "", pageParam, filterTab: filters.tab, filterCategory: filters.category,
+      filterVibes: filters.vibes, sortBy: filters.sort,
+    }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+  });
+}
+
+/** What the list tab shows first. */
+export const DEFAULT_FEED: Parameters<typeof feedQuery>[2] = { tab: "cravelist", category: null, vibes: [], sort: "newest" };
