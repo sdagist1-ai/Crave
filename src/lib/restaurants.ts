@@ -1,4 +1,4 @@
-import { infiniteQueryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { supabase } from "./supabase";
 import type { Profile, Restaurant, Review, SortOption } from "../types";
 
@@ -162,3 +162,50 @@ export function feedQuery(uid: string, groupId: string | undefined, filters: {
 
 /** What the list tab shows first. */
 export const DEFAULT_FEED: Parameters<typeof feedQuery>[2] = { tab: "cravelist", cuisines: [], occasion: null, vibes: [], sort: "newest" };
+
+/** Every place on a list in one call (Passport, and instant filter previews). */
+export function wholeListQuery(uid: string, groupId: string | undefined) {
+  return queryOptions({
+    queryKey: ["restaurants", "whole", uid, groupId],
+    queryFn: async () => (await fetchRestaurants({ uid, groupId: groupId!, all: true })).restaurants,
+    enabled: !!groupId,
+  });
+}
+
+const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : null);
+
+/**
+ * get_group_feed's filters and order, applied to places already on the phone, so a
+ * filter shows its results the moment it's tapped while the server's answer loads.
+ * Keep in step with the SQL (tab, cuisines with "" = none yet, occasion, sort).
+ */
+export function filterLocally(places: Restaurant[], f: {
+  tab?: "cravelist" | "tried"; cuisines?: string[]; occasion?: string | null; sort?: SortOption;
+}): Restaurant[] {
+  const out = places.filter((r) =>
+    (!f.tab || (f.tab === "tried") === r.visited)
+    && (!f.cuisines?.length || f.cuisines.includes(r.cuisine ?? ""))
+    && (!f.occasion || r.occasions.includes(f.occasion)));
+
+  // Nulls last, then newest first, then id: the same tie-breaks as the SQL.
+  const key = (r: Restaurant): number | null => {
+    switch (f.sort) {
+      case "rating": return r.rating;
+      case "score": return r.userScore;
+      case "visited": {
+        const last = Math.max(...r.reviews.map((rev) => time(rev.created_at) ?? 0));
+        return time(r.visitedAt) ?? (r.reviews.length ? last : null);
+      }
+      default: return null;
+    }
+  };
+  return out.sort((a, b) => {
+    const ka = key(a), kb = key(b);
+    if (ka !== kb) {
+      if (ka == null) return 1;
+      if (kb == null) return -1;
+      return kb - ka;
+    }
+    return (time(b.createdAt) ?? 0) - (time(a.createdAt) ?? 0) || b.id - a.id;
+  });
+}

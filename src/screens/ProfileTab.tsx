@@ -8,6 +8,9 @@ import { fetchMyStats } from "../lib/groups";
 import { uploadAvatar } from "../lib/images";
 import { inviteLink } from "../lib/invites";
 import { displayName } from "../utils/people";
+import { WEB_VERSION } from "../config/version";
+import { App } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import { Avatar, AvatarStack, Glow, PageTitle, PrimaryButton, Sheet, TextField } from "../components/ui";
 
 type SheetId = null | "settings" | "edit-name" | "join" | "create" | "delete" | { invite: Group } | { manage: string };
@@ -22,6 +25,12 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
 }) {
   const queryClient = useQueryClient();
   const [sheet, setSheet] = useState<SheetId>(null);
+  // App Store build number, shown next to the version in Settings.
+  const nativeBuild = useQuery({
+    queryKey: ["nativeBuild"],
+    queryFn: async () => (Capacitor.isNativePlatform() ? (await App.getInfo()).build : null),
+    staleTime: Infinity,
+  }).data;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -184,11 +193,6 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
             </span>
           </button>
         </div>
-
-        <div className="flex justify-center gap-5 text-[13px]">
-          <button type="button" onClick={signOut} className="h-11 text-muted">Sign out</button>
-          <button type="button" onClick={() => setSheet("delete")} className="h-11 text-danger">Delete account</button>
-        </div>
       </div>
 
       {/* ─── Sheets ─── */}
@@ -201,6 +205,10 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
             <SheetAction icon={<LogOut size={18} />} onClick={signOut}>Sign out</SheetAction>
             <SheetAction icon={<Trash2 size={18} />} onClick={() => setSheet("delete")} danger>Delete account</SheetAction>
           </div>
+          {/* The running web version: changes when a live update lands. */}
+          <p className="m-0 pt-2 pb-1 text-center font-mono text-[11px] tracking-[0.08em] text-muted">
+            Crave v{WEB_VERSION}{nativeBuild ? ` · build ${nativeBuild}` : ""}
+          </p>
         </Sheet>
       )}
 
