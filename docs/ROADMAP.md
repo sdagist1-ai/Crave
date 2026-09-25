@@ -50,6 +50,34 @@ Plus features (things that excite people *and* cost money to run):
 5. **Unlimited photos**, with a sensible cap on the free plan.
 6. Extras: custom app icons, Passport stamp themes, export/backup.
 
+## 4. Make it feel like Crave: save → spin → go → reveal → remember
+
+The data shows the real problem: most saved places never get tried (57 saved, 13 tried
+in the beta). These features turn saving into going, and going into shared memory.
+None of them call Google, so they cost nothing to run.
+
+1. **Sealed scores + the reveal.** You can't see anyone's score for a place until
+   you've given yours; then Crave flips them together ("You 9 · Rebecca 6 — the great
+   Lucali debate"). Enforce it on the server (an RLS policy on `reviews`: others' rows are
+   readable only if you've reviewed that place), not just in the UI.
+   - **Taste match** from paired scores: "You and Rebecca agree 74% of the time"
+     (within 1 point), biggest debate, shared MUSTs.
+   - Nudge: "Rebecca rated Lucali. Rate it to see her score."
+2. **Spin → plan.** "Lock it in" turns a spin into "Up next: Lucali · Friday" on
+   everyone's phone; a reminder on the day, then "How was Lucali?" opens the sealed
+   rating. One **veto** per person per spin. Needs a `plans` table.
+3. **Visits, not a yes/no switch.** A `visits` table (place, date, who went, photos)
+   instead of the `visited` boolean. Unlocks "One year ago tonight: Ler Lers",
+   "Your spot" (visited 5×), dated Passport stamps, and the data for Crave Wrapped.
+   A completed plan creates a visit.
+
+Smaller touches in the same spirit: list ageing ("Saved 94 days ago", a "Longest
+waiting" shelf Spin can favour); a home-screen widget ("Up next: Lucali · Fri") that reuses
+the App Group from the share sheet; show "Why this spot?" as a quote from whoever saved it.
+
+Avoid: public profiles, feeds, follower counts (breaks "private by design") and
+generic AI recommendations.
+
 ## Smaller ideas
 
 - "Rebecca added Lucali 🍕" banner when a list member adds a place (live updates
