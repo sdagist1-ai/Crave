@@ -5,6 +5,7 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "./main.css";
 import { StartupError } from "./components/StartupError";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
@@ -21,7 +22,7 @@ if (missing.length) {
   );
 } else {
   import("./App")
-    .then(({ default: App }) => root.render(<React.StrictMode><App /></React.StrictMode>))
+    .then(({ default: App }) => root.render(<React.StrictMode><ErrorBoundary><App /></ErrorBoundary></React.StrictMode>))
     .catch((err) => {
       console.error("Crave failed to start", err);
       root.render(<StartupError title="Crave couldn't start" detail="Close the app and open it again. If it keeps happening, reinstall the latest version." />);
