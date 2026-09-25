@@ -11,6 +11,7 @@ import { fetchRestaurants } from "./lib/restaurants";
 import { fetchMyGroups } from "./lib/groups";
 import { parseShareLink, receiveShare, useIncomingShare, type SharedPlace } from "./lib/shareInbox";
 import { publishForShareExtension, SHARED_KEYS } from "./lib/sharedStore";
+import { clearPendingInvite, parseInviteLink, receiveInvite, usePendingInvite } from "./lib/invites";
 import type { Restaurant, TabId } from "./types";
 
 import { BottomTabBar } from "./components/BottomTabBar";
@@ -49,6 +50,16 @@ async function fetchSavedPlaces(): Promise<SavedPlace[]> {
 
 function readStoredGroup() {
   try { return localStorage.getItem(ACTIVE_GROUP_KEY); } catch { return null; }
+}
+
+function InviteNotice({ text, error }: { text: string; error?: boolean }) {
+  return (
+    <div role="status" className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex justify-center px-5 pt-safe">
+      <div className={`mt-3 rounded-full px-5 py-3 text-[15px] font-semibold shadow-float animate-rise ${error ? "bg-surface text-danger" : "bg-ink text-white"}`}>
+        {text}
+      </div>
+    </div>
+  );
 }
 
 function AppShellSkeleton() {
@@ -98,6 +109,42 @@ function CraveApp({ uid }: { uid: string }) {
     setStoredGroupId(id);
     try { localStorage.setItem(ACTIVE_GROUP_KEY, id); } catch { /* storage unavailable */ }
   };
+
+  // An invite link (www.cravelist.us/join/CODE) that arrived before or after sign-in:
+  // join it now, open that list, and say so. New users skip "Start your first list".
+  const inviteCode = usePendingInvite();
+  const [inviteNotice, setInviteNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  useEffect(() => {
+    if (!inviteCode) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("join_group", { invite_code: inviteCode });
+      if (cancelled) return;
+      if (error || typeof data !== "string") {
+        setInviteNotice({
+          error: true,
+          text: error?.message.includes("Invalid share code") ? "That invite has expired or was reset. Ask for a new link."
+            : error?.message ?? "Couldn't join that list. Try the link again.",
+        });
+      } else {
+        const updated = await queryClient.fetchQuery({ queryKey: ["groups", uid], queryFn: fetchMyGroups, staleTime: 0 });
+        if (cancelled) return;
+        setStoredGroupId(data);
+        try { localStorage.setItem(ACTIVE_GROUP_KEY, data); } catch { /* storage unavailable */ }
+        setActiveTab("list");
+        const name = updated.find((g) => g.id === data)?.name;
+        setInviteNotice({ text: name ? `You're in! Welcome to ${name}` : "You're in!" });
+      }
+      // Last: clearing it re-renders with no invite, which ends this effect.
+      clearPendingInvite();
+    })();
+    return () => { cancelled = true; };
+  }, [inviteCode, queryClient, uid]);
+  useEffect(() => {
+    if (!inviteNotice) return;
+    const t = setTimeout(() => setInviteNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [inviteNotice]);
 
   const changeTab = (tab: TabId) => {
     setActiveTab(tab);
@@ -233,7 +280,8 @@ function CraveApp({ uid }: { uid: string }) {
     },
   });
 
-  if (groupsQuery.isPending) return <AppShellSkeleton />;
+  // Joining from an invite: don't flash "Start your first list" first.
+  if (groupsQuery.isPending || (inviteCode && groups.length === 0)) return <AppShellSkeleton />;
 
   if (groupsQuery.isError && groups.length === 0) {
     return (
@@ -249,6 +297,7 @@ function CraveApp({ uid }: { uid: string }) {
   if (groups.length === 0) {
     return (
       <Suspense fallback={<AppShellSkeleton />}>
+        {inviteNotice?.error && <InviteNotice {...inviteNotice} />}
         <OnboardingScreen onComplete={(id) => {
           if (id) selectGroup(id);
           queryClient.invalidateQueries({ queryKey: ["groups"] });
@@ -266,6 +315,7 @@ function CraveApp({ uid }: { uid: string }) {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-background">
+      {inviteNotice && <InviteNotice {...inviteNotice} />}
       {tabPanel("list", (
         <ListTab uid={uid} group={group} groups={groups} onSelectGroup={selectGroup}
           onAdd={(q) => setAddQuery(q ?? "")} onOpen={setDetail} />
@@ -381,8 +431,10 @@ export default function App() {
 
     // Handle native deep linking from emails
     const deepLinkListener = CapacitorApp.addListener('appUrlOpen', data => {
-      const shared = parseShareLink(data.url);
-      if (shared) receiveShare(shared);
+      const invite = parseInviteLink(data.url);
+      const shared = invite ? null : parseShareLink(data.url);
+      if (invite) receiveInvite(invite);
+      else if (shared) receiveShare(shared);
       else if (data.url.includes("type=recovery") || data.url.includes("error_code=")) {
         const urlObj = new URL(data.url);
         processHash(urlObj.hash);
@@ -391,8 +443,11 @@ export default function App() {
 
     // Opened from the share sheet while the app wasn't running.
     CapacitorApp.getLaunchUrl().then((launch) => {
-      const shared = launch?.url ? parseShareLink(launch.url) : null;
-      if (shared) receiveShare(shared);
+      if (!launch?.url) return;
+      const invite = parseInviteLink(launch.url);
+      const shared = invite ? null : parseShareLink(launch.url);
+      if (invite) receiveInvite(invite);
+      else if (shared) receiveShare(shared);
     }).catch(() => {});
 
     supabase.auth.getSession().then(({ data: { session: s } }) => {

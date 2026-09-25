@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Camera, ChevronLeft, Link2, Loader2, Plus } from "lucide-react";
+import { ArrowRight, Camera, ChevronLeft, ClipboardPaste, Link2, Loader2, Plus } from "lucide-react";
 import { getCurrentUserId, supabase } from "../lib/supabase";
 import { uploadAvatar } from "../lib/images";
+import { findInviteCode } from "../lib/invites";
 import { Glow, PrimaryButton, TextField } from "../components/ui";
 
 type View = "photo" | "choose" | "create" | "join";
@@ -46,6 +47,19 @@ export function OnboardingScreen({ onComplete }: { onComplete: (groupId?: string
     setBusy(false);
     if (err) return setError(err.message);
     onComplete(data ?? undefined);
+  };
+
+  // The website's join page copies the invite when someone taps "Get Crave", so a
+  // friend who just installed can paste it here instead of typing the code.
+  const pasteInvite = async () => {
+    setError(null);
+    try {
+      const found = findInviteCode(await navigator.clipboard.readText());
+      if (found) setCode(found);
+      else setError("No invite found. Copy the invite message or code, then tap Paste again.");
+    } catch {
+      setError("Couldn't paste. Type the code instead.");
+    }
   };
 
   const join = async () => {
@@ -137,6 +151,10 @@ export function OnboardingScreen({ onComplete }: { onComplete: (groupId?: string
           <form className="flex flex-col gap-4 animate-rise" onSubmit={(e) => { e.preventDefault(); if (code.length === 6) join(); }}>
             <TextField label="Invite code" placeholder="ABC123" value={code} autoFocus autoCapitalize="characters" autoComplete="off"
               onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} />
+            <button type="button" onClick={pasteInvite}
+              className="-mt-1 flex h-11 items-center gap-2 self-start text-sm font-semibold text-accent-ink">
+              <ClipboardPaste size={16} /> Paste invite
+            </button>
             {error && <p role="alert" className="m-0 text-sm text-danger">{error}</p>}
             <PrimaryButton type="submit" disabled={busy || code.length !== 6} tone="accent">
               {busy ? <Loader2 size={18} className="animate-spin" /> : null} Join list

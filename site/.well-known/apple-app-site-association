@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["SKVGHERSKM.com.carldagist.crave"],
+        "components": [{ "/": "/join/*", "comment": "Invite links open Crave and join the list" }],
+        "appID": "SKVGHERSKM.com.carldagist.crave",
+        "paths": ["/join/*"]
+      }
+    ]
+  }
+}
