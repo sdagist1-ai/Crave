@@ -5,11 +5,9 @@ import { supabase } from "./supabase";
 // The database guesses both whenever a place is saved; these are the reads and the
 // member edits.
 
-export type CatalogCuisine = { label: string; region: string; sort: number };
-
 type Counts = { cravelist: number; tried: number };
 export type ListFacets = {
-  cuisines: (Counts & { label: string; region: string })[];
+  cuisines: (Counts & { label: string })[];
   occasions: (Counts & { label: string })[];
   needs_cuisine: Counts;
 };
@@ -22,17 +20,6 @@ export function cuisinesLabel(cuisines: string[]) {
   const names = cuisines.map((c) => (c === NEEDS_CUISINE ? "Needs a cuisine" : c));
   return names.length <= 2 ? names.join(" + ") : `${names[0]} + ${names.length - 1} more`;
 }
-
-/** Every cuisine Crave knows, for the picker. Changes only with a migration. */
-export const catalogQuery = queryOptions({
-  queryKey: ["cuisine-catalog"],
-  queryFn: async (): Promise<CatalogCuisine[]> => {
-    const { data, error } = await supabase.from("cuisine_catalog").select("label, region, sort").order("sort");
-    if (error) throw error;
-    return data ?? [];
-  },
-  staleTime: 24 * 60 * 60 * 1000,
-});
 
 /** What's on a list, with counts per tab: drives the chip row and the Cuisines sheet.
  *  Under "restaurants" so it refreshes whenever places change. */
@@ -48,7 +35,8 @@ export function facetsQuery(groupId: string | undefined) {
   });
 }
 
-export type CuisineGuess = { cuisine: string | null; crowd: string[] };
+/** `cuisine` is the group (Caribbean); `detail` the specific cuisine (Jamaican). */
+export type CuisineGuess = { cuisine: string | null; detail: string | null; crowd: string[] };
 
 /** The cuisine the database would give this place, and what other lists call it. */
 export async function guessCuisine(place: { id: string; name: string; primaryType?: string; types?: string[] }): Promise<CuisineGuess> {
@@ -59,23 +47,12 @@ export async function guessCuisine(place: { id: string; name: string; primaryTyp
     p_name: place.name,
   });
   if (error) throw error;
-  const guess = data as unknown as { cuisine: string | null; crowd: string[] | null };
-  return { cuisine: guess.cuisine ?? null, crowd: guess.crowd ?? [] };
+  const guess = data as unknown as { cuisine: string | null; detail: string | null; crowd: string[] | null };
+  return { cuisine: guess.cuisine ?? null, detail: guess.detail ?? null, crowd: guess.crowd ?? [] };
 }
 
 /** A member's fix, shared with everyone on the list (null clears the cuisine). */
 export async function updatePlaceTags(id: number, changes: { cuisine?: string | null; occasions?: string[] }) {
   const { error } = await supabase.from("restaurants").update(changes).eq("id", id);
   if (error) throw error;
-}
-
-/** Group cuisines by region, keeping the given order within each. */
-export function byRegion<T extends { region: string }>(items: T[]): [string, T[]][] {
-  const groups = new Map<string, T[]>();
-  for (const item of items) {
-    const list = groups.get(item.region) ?? [];
-    list.push(item);
-    groups.set(item.region, list);
-  }
-  return [...groups];
 }
