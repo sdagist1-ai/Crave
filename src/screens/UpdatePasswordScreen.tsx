@@ -9,8 +9,8 @@ export function UpdatePasswordScreen({ onComplete }: { onComplete: () => void })
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
-    if (password.length < 6) {
-      setError("Use at least 6 characters.");
+    if (password.length < 8) {
+      setError("Use at least 8 characters.");
       return;
     }
     setLoading(true);

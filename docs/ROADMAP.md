@@ -78,6 +78,25 @@ the App Group from the share sheet; show "Why this spot?" as a quote from whoeve
 Avoid: public profiles, feeds, follower counts (breaks "private by design") and
 generic AI recommendations.
 
+## Security follow-ups (once most people are on 1.4)
+
+- **Stop the app uploading to `place_photos`.** Only the `places` function should write
+  there, but app versions before 1.4 upload restaurant photos themselves (119 of them
+  so far). Once they're rare, drop `place_photos` from the "Signed-in users can upload
+  images" storage policy.
+- **Replace the old Google API key.** Versions before 1.4 have a Google key built into the
+  app. Create a new key for the `places` function (`GOOGLE_PLACES_API_KEY` secret),
+  then delete the old one in Google Cloud.
+- **Leaked-password check** (Supabase → Authentication → Password security) needs the Pro plan.
+
+## Growth
+
+- **Invite links** that auto-join: `<site>/join/CODE` opens the app via Universal Links
+  (needs the site domain, `apple-app-site-association`, and the Associated Domains
+  capability); without the app, a join page copies the invite so the app can offer
+  "Join Bae & I?" right after sign-up.
+- **Ask for an App Store rating at a happy moment** (after rating a place 9+).
+
 ## Smaller ideas
 
 - "Rebecca added Lucali 🍕" banner when a list member adds a place (live updates
