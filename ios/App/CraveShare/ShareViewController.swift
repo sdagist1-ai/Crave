@@ -12,6 +12,9 @@ final class ShareViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Crave's sheet is light-only; without this it inherits a dark host (e.g. Google Maps
+        // at night) and system text like placeholders turns light-on-light.
+        overrideUserInterfaceStyle = .light
         view.backgroundColor = UIColor(red: 0.973, green: 0.980, blue: 0.988, alpha: 1)
 
         let model = ShareModel(
