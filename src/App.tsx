@@ -18,20 +18,23 @@ import { BottomTabBar } from "./components/BottomTabBar";
 import { AnimatedSplash } from "./components/SplashScreen";
 import { RestaurantCardSkeleton } from "./components/RestaurantCard";
 import { ListTab } from "./screens/ListTab";
+// Tabs are bundled with the app (they're small): lazy tabs flashed a placeholder
+// for a frame every time one was opened for the first time.
+import { PassportTab } from "./screens/PassportTab";
+import { SpinTab } from "./screens/SpinTab";
+import { ProfileTab } from "./screens/ProfileTab";
 import type { SavedPlace } from "./components/SearchOverlay";
 
 // Everything not on the first screen is code-split.
 const SearchOverlay = lazy(() => import("./components/SearchOverlay").then((m) => ({ default: m.SearchOverlay })));
 const RateSheet = lazy(() => import("./components/RateSheet").then((m) => ({ default: m.RateSheet })));
 const RestaurantDetail = lazy(() => import("./components/RestaurantDetail").then((m) => ({ default: m.RestaurantDetail })));
-const ProfileTab = lazy(() => import("./screens/ProfileTab").then((m) => ({ default: m.ProfileTab })));
-const SpinTab = lazy(() => import("./screens/SpinTab").then((m) => ({ default: m.SpinTab })));
-const PassportTab = lazy(() => import("./screens/PassportTab").then((m) => ({ default: m.PassportTab })));
 const AuthScreen = lazy(() => import("./screens/AuthScreen").then((m) => ({ default: m.AuthScreen })));
 const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen").then((m) => ({ default: m.OnboardingScreen })));
 const UpdatePasswordScreen = lazy(() => import("./screens/UpdatePasswordScreen").then((m) => ({ default: m.UpdatePasswordScreen })));
 
 const ACTIVE_GROUP_KEY = "crave_active_group";
+const TAB_ORDER: TabId[] = ["list", "passport", "spin", "profile"];
 
 async function fetchSavedPlaces(): Promise<SavedPlace[]> {
   const { data, error } = await supabase
@@ -52,6 +55,35 @@ function readStoredGroup() {
   try { return localStorage.getItem(ACTIVE_GROUP_KEY); } catch { return null; }
 }
 
+/**
+ * One tab's screen. Tabs stay mounted once opened (keeps scroll and data); hidden
+ * ones sit on the side they're on in the tab bar, so switching glides the right way
+ * (see .tab-panel in main.css). A tab opened for the first time mounts hidden and
+ * shows on the next frame, so it slides in too instead of popping.
+ */
+function TabPanel({ tab, activeTab, previousTab, children }: {
+  tab: TabId; activeTab: TabId; previousTab: TabId; children: React.ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const shown = mounted && activeTab === tab;
+  return (
+    <div
+      className={`tab-panel absolute inset-0 ${activeTab === tab ? "z-10" : "z-0"}`}
+      data-state={shown ? "active" : "hidden"}
+      // Which side it waits on: relative to the open tab, or (for the tab arriving)
+      // relative to the one it replaces.
+      data-side={TAB_ORDER.indexOf(tab) < TAB_ORDER.indexOf(tab === activeTab ? previousTab : activeTab) ? "before" : "after"}
+      aria-hidden={!shown}
+    >
+      {children}
+    </div>
+  );
+}
+
 function InviteNotice({ text, error }: { text: string; error?: boolean }) {
   return (
     <div role="status" className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex justify-center px-5 pt-safe">
@@ -66,12 +98,12 @@ function AppShellSkeleton() {
   return (
     <div className="flex h-full flex-col gap-4 bg-background px-5 pt-safe" aria-busy="true" aria-label="Loading">
       <div className="flex items-center justify-between pt-2">
-        <div className="h-11 w-44 animate-pulse rounded-full bg-subtle" />
-        <div className="h-11 w-11 animate-pulse rounded-full bg-subtle" />
+        <div className="h-11 w-44 skeleton rounded-full" />
+        <div className="h-11 w-11 skeleton rounded-full" />
       </div>
-      <div className="h-3 w-32 animate-pulse rounded bg-subtle" />
-      <div className="h-24 w-64 animate-pulse rounded-xl bg-subtle" />
-      <div className="h-[50px] animate-pulse rounded-2xl bg-subtle" />
+      <div className="h-3 w-32 skeleton rounded" />
+      <div className="h-24 w-64 skeleton rounded-xl" />
+      <div className="h-[50px] skeleton rounded-2xl" />
       {[0, 1, 2].map((i) => <RestaurantCardSkeleton key={i} />)}
     </div>
   );
@@ -152,7 +184,10 @@ function CraveApp({ uid }: { uid: string }) {
     return () => clearTimeout(t);
   }, [inviteNotice]);
 
+  const [previousTab, setPreviousTab] = useState<TabId>("list");
   const changeTab = (tab: TabId) => {
+    if (tab === activeTab) return;
+    setPreviousTab(activeTab);
     setActiveTab(tab);
     setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
   };
@@ -226,9 +261,6 @@ function CraveApp({ uid }: { uid: string }) {
   useEffect(() => {
     if (!groupId) return;
     const warm = () => {
-      import("./screens/ProfileTab");
-      import("./screens/SpinTab");
-      import("./screens/PassportTab");
       import("./components/SearchOverlay");
       import("./components/RestaurantDetail");
       import("./components/RateSheet");
@@ -314,9 +346,9 @@ function CraveApp({ uid }: { uid: string }) {
 
   const tabPanel = (tab: TabId, node: React.ReactNode) =>
     visitedTabs.has(tab) && (
-      <div className={`absolute inset-0 ${activeTab === tab ? "z-10" : "pointer-events-none invisible z-0"}`} aria-hidden={activeTab !== tab}>
+      <TabPanel key={tab} tab={tab} activeTab={activeTab} previousTab={previousTab}>
         <Suspense fallback={<AppShellSkeleton />}>{node}</Suspense>
-      </div>
+      </TabPanel>
     );
 
   return (

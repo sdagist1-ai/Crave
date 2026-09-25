@@ -148,7 +148,7 @@ export function Segmented<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-[10px] text-sm transition-all ${size === "lg" ? "h-[42px]" : "h-10"} ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-[10px] text-sm transition-[background-color,color,box-shadow] ${size === "lg" ? "h-[42px]" : "h-10"} ${
               active ? "bg-surface font-semibold text-ink shadow-[0_1px_3px_rgba(15,23,42,0.12)]" : "font-medium text-muted"
             }`}
           >

@@ -74,13 +74,13 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
 export function RestaurantCardSkeleton() {
   return (
     <div className="flex items-center gap-3.5 rounded-[22px] border border-border bg-surface p-2.5" aria-hidden="true">
-      <div className="h-[84px] w-[84px] shrink-0 animate-pulse rounded-2xl bg-subtle" />
+      <div className="h-[84px] w-[84px] shrink-0 skeleton rounded-2xl" />
       <div className="flex flex-1 flex-col gap-2">
-        <div className="h-4 w-3/4 animate-pulse rounded-md bg-subtle" />
-        <div className="h-3 w-1/2 animate-pulse rounded-md bg-subtle" />
-        <div className="h-4 w-16 animate-pulse rounded-full bg-subtle" />
+        <div className="h-4 w-3/4 skeleton rounded-md" />
+        <div className="h-3 w-1/2 skeleton rounded-md" />
+        <div className="h-4 w-16 skeleton rounded-full" />
       </div>
-      <div className="h-[52px] w-[52px] shrink-0 animate-pulse rounded-full bg-subtle" />
+      <div className="h-[52px] w-[52px] shrink-0 skeleton rounded-full" />
     </div>
   );
 }

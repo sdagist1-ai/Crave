@@ -132,7 +132,7 @@ export function PassportTab({ uid, group, onOpen, active = true }: {
 
         {places.isPending ? (
           <div className="flex gap-2.5">
-            {[0, 1, 2].map((i) => <div key={i} className="h-[120px] w-[104px] animate-pulse rounded-[18px] bg-subtle" />)}
+            {[0, 1, 2].map((i) => <div key={i} className="h-[120px] w-[104px] skeleton rounded-[18px]" />)}
           </div>
         ) : stamps.length === 0 ? (
           <p className="m-0 rounded-[18px] border border-dashed border-border-strong p-5 text-center text-sm text-muted">
@@ -141,7 +141,9 @@ export function PassportTab({ uid, group, onOpen, active = true }: {
         ) : (
           <div className="-mx-5 flex gap-4 overflow-x-auto px-5 pt-4 pb-3">
             {stamps.slice(0, 12).map((r, i) => (
-              <Stamp key={r.id} r={r} index={i} onOpen={onOpen} />
+              <div key={r.id} className="stamp-in shrink-0" style={{ "--i": i } as React.CSSProperties}>
+                <Stamp r={r} index={i} onOpen={onOpen} />
+              </div>
             ))}
             {nextStamp && (
               <button type="button" onClick={() => onOpen(nextStamp)}

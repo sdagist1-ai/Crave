@@ -270,7 +270,7 @@ function Stat({ value, label, accent = false }: { value: number | string | undef
   return (
     <div className="flex flex-col gap-0.5 rounded-[14px] bg-background px-3 py-2.5">
       <span className={`font-display text-2xl leading-none font-extrabold tabular ${accent ? "text-accent-ink" : ""}`}>
-        {value ?? <span className="inline-block h-6 w-8 animate-pulse rounded bg-subtle align-middle" />}
+        {value ?? <span className="inline-block h-6 w-8 skeleton rounded align-middle" />}
       </span>
       <span className="text-[11px] text-muted">{label}</span>
     </div>
