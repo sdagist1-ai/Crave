@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, CloudOff, Loader2, LocateFixed, Plus, Search, Star, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { cachePlacePhoto, placeDetails, PlacesError, searchPlaces, type PlaceResult } from "../lib/places";
+import { cachePlacePhoto, placeDetails, PlacesError, resolveShare, searchPlaces, type PlaceResult } from "../lib/places";
+import type { SharedPlace } from "../lib/shareInbox";
 import { useDebounce } from "../hooks/useDebounce";
 import { useApproxLocation } from "../hooks/useApproxLocation";
 import { VIBE_OPTIONS } from "../constants/theme";
@@ -36,11 +37,20 @@ function tileTint(name: string) {
   return TILE_TINTS[Math.abs(h) % TILE_TINTS.length];
 }
 
-export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery = "", onSave, onClose }: {
+/** Loose name match: "Lucali" vs "Lucali Brooklyn", ignoring case, accents and punctuation. */
+function sameName(a: string, b: string) {
+  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const x = norm(a), y = norm(b);
+  return !!x && !!y && (x.includes(y) || y.includes(x));
+}
+
+export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery = "", shared = null, onSave, onClose }: {
   activeGroupId: string | null;
   savedPlaces: SavedPlace[];
   groups: Group[];
   initialQuery?: string;
+  /** A place shared from Apple/Google Maps: look it up and jump straight to "Add to…". */
+  shared?: SharedPlace | null;
   onSave: () => void;
   onClose: () => void;
 }) {
@@ -55,7 +65,18 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   const { coords, status: locationStatus, request: requestLocation } = useApproxLocation();
   // Wait for a location we already have permission for, so results come back
   // near-you-first instead of searching twice.
-  const locationSettled = locationStatus !== "checking" && !(locationStatus === "granted" && !coords);
+  // A shared place: read the link, search for it near its own pin, and pick it if the top match fits.
+  const resolved = useQuery({
+    queryKey: ["resolveShare", shared?.url, shared?.text],
+    queryFn: () => resolveShare(shared!),
+    enabled: !!shared,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const sharedPin = resolved.data?.lat != null && resolved.data.lng != null ? { lat: resolved.data.lat, lng: resolved.data.lng } : null;
+  useEffect(() => { if (resolved.data) setQuery(resolved.data.query); }, [resolved.data]);
+  const searchCoords = sharedPin ?? coords;
+  const locationSettled = !!sharedPin || (locationStatus !== "checking" && !(locationStatus === "granted" && !coords));
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const listName = groups.find((g) => g.id === activeGroupId)?.name ?? "your list";
@@ -65,8 +86,8 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
   const trimmedQuery = debouncedQuery.trim();
   const canSearch = trimmedQuery.length >= MIN_QUERY;
   const results = useQuery({
-    queryKey: ["searchRestaurants", trimmedQuery, coords?.lat.toFixed(2), coords?.lng.toFixed(2)],
-    queryFn: ({ signal }) => searchPlaces(trimmedQuery, { coords, signal }),
+    queryKey: ["searchRestaurants", trimmedQuery, searchCoords?.lat.toFixed(2), searchCoords?.lng.toFixed(2)],
+    queryFn: ({ signal }) => searchPlaces(trimmedQuery, { coords: searchCoords, signal }),
     enabled: canSearch && locationSettled,
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -90,6 +111,16 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
     setNotes(from?.notes ?? "");
     setSaveError(null);
   };
+
+  const autoPicked = useRef(false);
+  useEffect(() => {
+    const target = resolved.data;
+    if (!target || autoPicked.current || trimmedQuery !== target.query.trim() || !results.data || results.isPlaceholderData) return;
+    autoPicked.current = true;
+    const match = results.data.find((p) => sameName(p.name, target.name));
+    const saved = match ? savedPlaces.filter((s) => s.placeId === match.id) : [];
+    if (match && !saved.some((s) => s.groupId === activeGroupId)) choose(match, saved[0]);
+  }, [resolved.data, trimmedQuery, results.data, results.isPlaceholderData, savedPlaces, activeGroupId]);
 
   const save = async () => {
     if (!selected || !activeGroupId) return;
@@ -236,7 +267,17 @@ export function SearchOverlay({ activeGroupId, savedPlaces, groups, initialQuery
       )}
 
       <div className="flex-1 overflow-y-auto pb-safe">
-        {query.trim().length < MIN_QUERY ? (
+        {shared && resolved.isPending ? (
+          <div className="flex flex-col items-center px-8 py-16 text-center text-muted">
+            <Loader2 size={28} className="mb-3 animate-spin text-accent" aria-hidden="true" />
+            <p className="m-0 text-sm">Finding the spot you shared…</p>
+          </div>
+        ) : shared && resolved.isError && query.trim().length < MIN_QUERY ? (
+          <div className="flex flex-col items-center px-8 py-16 text-center text-muted">
+            <Search size={32} className="mb-3 text-border-strong" aria-hidden="true" />
+            <p className="m-0 text-sm">Couldn't tell which place that was. Search for it by name instead.</p>
+          </div>
+        ) : query.trim().length < MIN_QUERY ? (
           <div className="flex flex-col items-center px-8 py-16 text-center text-muted">
             <Search size={32} className="mb-3 text-border-strong" aria-hidden="true" />
             <p className="m-0 text-sm">
