@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2C2DE46F3162A320D19C8935 /* ShareModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95D9A95B03B2395435B5614B /* ShareModel.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -15,8 +16,13 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		A3672F74F9F76853798D4F9E /* SharedStorePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1248C14C2C4199A9EF1B5C7F /* SharedStorePlugin.swift */; };
+		C61DB05370DBF7E7D69CEC6B /* ShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B510EB5D691C09AFDA246369 /* ShareView.swift */; };
 		CA25871A94AECE9BF66BEFAC /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE23691F28EF533BF451666C /* ShareViewController.swift */; };
 		CA5F1A66EDA0FCFF1D208458 /* CraveShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BD775D6E693D7BEE8B35366C /* CraveShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CB0B04E6F6583F0B1A959730 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B1C87210B5832C8D82D671 /* MainViewController.swift */; };
+		ED2184138CA75BE172F9D368 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED1149B20BAA0741A2D4B3B2 /* SharedStore.swift */; };
+		EE78AB98A29C9BD777582317 /* CraveAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00889194FCE56CDD63AE23E /* CraveAPI.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +50,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0284B2BBAED39589ABFAD163 /* App.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		07B1C87210B5832C8D82D671 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		1248C14C2C4199A9EF1B5C7F /* SharedStorePlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedStorePlugin.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		42AF1A9539DE630DB2E4FBCB /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
@@ -55,8 +64,13 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		95D9A95B03B2395435B5614B /* ShareModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
+		A00889194FCE56CDD63AE23E /* CraveAPI.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CraveAPI.swift; sourceTree = "<group>"; };
+		A0F4FDB0AA3AAE0558DB4353 /* CraveShare.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CraveShare.entitlements; sourceTree = "<group>"; };
+		B510EB5D691C09AFDA246369 /* ShareView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareView.swift; sourceTree = "<group>"; };
 		BD775D6E693D7BEE8B35366C /* CraveShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CraveShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CE23691F28EF533BF451666C /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		ED1149B20BAA0741A2D4B3B2 /* SharedStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +122,9 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				1248C14C2C4199A9EF1B5C7F /* SharedStorePlugin.swift */,
+				07B1C87210B5832C8D82D671 /* MainViewController.swift */,
+				0284B2BBAED39589ABFAD163 /* App.entitlements */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -117,6 +134,11 @@
 			children = (
 				CE23691F28EF533BF451666C /* ShareViewController.swift */,
 				42AF1A9539DE630DB2E4FBCB /* Info.plist */,
+				ED1149B20BAA0741A2D4B3B2 /* SharedStore.swift */,
+				A00889194FCE56CDD63AE23E /* CraveAPI.swift */,
+				95D9A95B03B2395435B5614B /* ShareModel.swift */,
+				B510EB5D691C09AFDA246369 /* ShareView.swift */,
+				A0F4FDB0AA3AAE0558DB4353 /* CraveShare.entitlements */,
 			);
 			name = CraveShare;
 			path = CraveShare;
@@ -177,10 +199,20 @@
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
 						ProvisioningStyle = Automatic;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
 					};
 					82D5A620FE8FD415AD8CBF1B = {
 						CreatedOnToolsVersion = 16.0;
 						ProvisioningStyle = Automatic;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -235,6 +267,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				A3672F74F9F76853798D4F9E /* SharedStorePlugin.swift in Sources */,
+				CB0B04E6F6583F0B1A959730 /* MainViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -243,6 +277,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				CA25871A94AECE9BF66BEFAC /* ShareViewController.swift in Sources */,
+				ED2184138CA75BE172F9D368 /* SharedStore.swift in Sources */,
+				EE78AB98A29C9BD777582317 /* CraveAPI.swift in Sources */,
+				2C2DE46F3162A320D19C8935 /* ShareModel.swift in Sources */,
+				C61DB05370DBF7E7D69CEC6B /* ShareView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -391,6 +429,7 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = SKVGHERSKM;
@@ -416,6 +455,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = SKVGHERSKM;
@@ -441,6 +481,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = CraveShare/CraveShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = SKVGHERSKM;
@@ -468,6 +509,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = CraveShare/CraveShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = SKVGHERSKM;

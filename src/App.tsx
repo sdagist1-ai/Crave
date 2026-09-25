@@ -10,6 +10,7 @@ import { supabase } from "./lib/supabase";
 import { fetchRestaurants } from "./lib/restaurants";
 import { fetchMyGroups } from "./lib/groups";
 import { parseShareLink, receiveShare, useIncomingShare, type SharedPlace } from "./lib/shareInbox";
+import { publishForShareExtension, SHARED_KEYS } from "./lib/sharedStore";
 import type { Restaurant, TabId } from "./types";
 
 import { BottomTabBar } from "./components/BottomTabBar";
@@ -88,6 +89,10 @@ function CraveApp({ uid }: { uid: string }) {
   // Fall back to the first list if the stored one was left or deleted.
   const group = groups.find((g) => g.id === storedGroupId) ?? groups[0];
   const groupId = group?.id;
+  // The share sheet ("Share → Crave" in Maps) defaults to the list open here.
+  useEffect(() => {
+    if (groupId) void publishForShareExtension(SHARED_KEYS.activeGroupId, groupId);
+  }, [groupId]);
 
   const selectGroup = (id: string) => {
     setStoredGroupId(id);
