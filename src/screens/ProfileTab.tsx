@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Share } from "@capacitor/share";
 import { Camera, Check, Copy, Ellipsis, Link2, Loader2, LogOut, Pencil, Plus, Settings, Share2, Trash2 } from "lucide-react";
@@ -25,12 +25,12 @@ export function ProfileTab({ uid, groups, activeGroupId, onSelectGroup, active =
 }) {
   const queryClient = useQueryClient();
   const [sheet, setSheet] = useState<SheetId>(null);
-  // App Store build number, shown next to the version in Settings.
-  const nativeBuild = useQuery({
-    queryKey: ["nativeBuild"],
-    queryFn: async () => (Capacitor.isNativePlatform() ? (await App.getInfo()).build : null),
-    staleTime: Infinity,
-  }).data;
+  // App Store build number, shown next to the version in Settings. Read from the app
+  // each time, not the query cache: that's saved on the phone and outlives an update.
+  const [nativeBuild, setNativeBuild] = useState<string | null>(null);
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) App.getInfo().then((info) => setNativeBuild(info.build)).catch(() => {});
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
