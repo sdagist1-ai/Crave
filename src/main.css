@@ -88,6 +88,20 @@
      bounce pulled the header away from the top and showed blank space. */
   * { overscroll-behavior: none; }
 
+  /* Feel like an app, not a web page: no text selection or long-press
+     "Copy / Look Up" menu on labels, cards and images. Anything people need
+     to copy (invite codes, links) has a copy button. Fields stay editable. */
+  * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
   *::-webkit-scrollbar { display: none; }
   * { scrollbar-width: none; }
 
