@@ -13,6 +13,15 @@ React + Capacitor iOS app (`ios/`), marketing site (`site/`), Supabase backend.
   websocket), so end-to-end client tests still need a device.
 - Edge Function source lives in `supabase/functions/`; keep the repo copy identical to what's deployed.
 
+## Email and website
+
+- cravelist.us DNS is on Vercel. The marketing site (`site/`) is the Vercel project
+  "crave-site"; only main deploys (the Hobby plan has a daily build limit, so `claude/`
+  branches are skipped in `vercel.json`). After merging a site change, check the deploy.
+- Inbox: support@cravelist.us on Zoho Mail (MX/SPF/DKIM records in Vercel).
+- Auth emails (sign-up, password reset) go out through Resend via Supabase SMTP, sender
+  "Crave <support@cravelist.us>". Supabase Site URL: https://www.cravelist.us.
+
 ## Shipping changes: live update or App Store build?
 
 **Web-only change** (screens, styles, app logic, anything under `src/`, `index.html`, CSS):
