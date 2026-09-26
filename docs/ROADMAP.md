@@ -155,6 +155,19 @@ places:
   OFFSET), so deep pages stay fast and a place added mid-scroll doesn't shift the pages.
 - **Virtualise the list** (only render cards near the viewport) and **cluster map
   markers** (PassportMap renders one DOM marker per place today).
+- **Apply realtime events per row** instead of refetching every list. Trigger: lists past
+  ~100 places or groups past ~5 members (today a partner's rating re-downloads the whole
+  list, ~50 ms at 50 places; at hundreds of places it's a visible pause on every event).
+  Design is worked out (2026-09-26): an event carries only the raw row, so on each event
+  fetch just the affected row (`get_group_feed` with `p_restaurant_id`, keyed by the
+  row's own group), coalesce 400 ms, and splice it into every cached list (feed pages,
+  whole list, Spin pools, detail) via a pure, unit-tested `src/lib/liveCache.ts` that
+  reuses `filterLocally` for membership and order. Only the small count queries
+  (groups, facets, my-stats) still refetch. Fallbacks to today's full refetch: a feed
+  with more server pages when membership or order changes (OFFSET paging would skip or
+  duplicate a row), feed keys with vibes, more than 8 rows in one batch, any error.
+  Skip queries that are invalidated-but-idle (hidden tabs); wait for in-flight fetches
+  before splicing. Test with a `QueryClient` under `node --experimental-strip-types`.
 - **Narrow realtime**: reviews/profiles/members events invalidate everything; scope them
   to the open list once there are many lists per user.
 
