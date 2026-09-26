@@ -46,7 +46,8 @@ build**:
    General, then Product → Archive and upload. Submit that build for review.
 
 Build numbers only go up across versions (a version holds many builds; each upload needs a
-new, higher number). Current: App Store build **9** (1.4), latest live update **1.4.3**.
+new, higher number). Current: App Store build **9** (1.4); the latest live update is `WEB_VERSION` in
+`src/config/version.ts`.
 
 If Xcode says "Unable to find module dependency" after a plugin change: quit Xcode,
 `rm -rf ~/Library/Developer/Xcode/DerivedData/App-*`, reopen, File → Packages → Reset
