@@ -39,7 +39,7 @@ const fail = (msg) => {
   console.error(`\n✖ ${msg}\n`);
   process.exit(1);
 };
-const git = (cmd) => execSync(`git ${cmd}`, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+const git = (cmd) => execSync(`git ${cmd}`, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd();
 const compare = (a, b) => {
   const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -59,10 +59,16 @@ function gitProblem() {
   const ahead = Number(git("rev-list --count origin/main..HEAD"));
   if (ahead) return `You have ${ahead} commit(s) that aren't on GitHub. Run: git push (or undo them), so the release matches main.`;
   // Changes that would end up in the bundle. Xcode edits files under ios/ on its own.
-  const dirty = git("status --porcelain").split("\n").filter((line) => line && !line.slice(3).startsWith("ios/"));
+  // Edited files anywhere (they could change the build), and new files where the build
+  // picks them up. Stray new files elsewhere (a screenshot) don't ship, so they're fine.
+  const dirty = git("status --porcelain").split("\n").filter((line) => {
+    const file = line.slice(3);
+    if (!line || file.startsWith("ios/")) return false;
+    return line.startsWith("??") ? /^(src|public)\//.test(file) : true;
+  });
   if (dirty.length) {
     return `These changes aren't on GitHub, so they'd ship without review:\n  ${dirty.join("\n  ")}\n` +
-      "Merge them through a PR first, or undo them: git checkout -- <file>";
+      "Merge them through a PR first, or undo them (git checkout -- <file>, or delete a new file).";
   }
   return null;
 }
