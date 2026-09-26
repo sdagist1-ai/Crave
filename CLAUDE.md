@@ -20,10 +20,13 @@ ship it as a **live update**, no App Store review. After the PR is merged, the u
 their Mac, from main:
 
 ```
-git pull && npm install
-npm run ota -- <next version>     # e.g. 1.4.4, then 1.4.5 …
-git add src/config/version.ts && git commit -m "Live update <version>" && git push
+git pull --no-edit && npm install
+npm run ota -- <next version>     # e.g. 1.4.5, then 1.4.6 …
 ```
+
+The script refuses to publish unless the Mac matches GitHub's main (so what ships is what
+was reviewed), and afterwards commits and pushes the `WEB_VERSION` bump itself. Never tell
+the user to commit `version.ts` by hand.
 
 Phones on build `MIN_NATIVE_BUILD`+ download it on the next open and switch to it the next
 time the app is backgrounded (so it shows after closing/reopening the app twice). Settings
@@ -43,7 +46,8 @@ build**:
    General, then Product → Archive and upload. Submit that build for review.
 
 Build numbers only go up across versions (a version holds many builds; each upload needs a
-new, higher number). Current: App Store build **9** (1.4), latest live update **1.4.3**.
+new, higher number). Current: App Store build **9** (1.4); the latest live update is `WEB_VERSION` in
+`src/config/version.ts`.
 
 If Xcode says "Unable to find module dependency" after a plugin change: quit Xcode,
 `rm -rf ~/Library/Developer/Xcode/DerivedData/App-*`, reopen, File → Packages → Reset
