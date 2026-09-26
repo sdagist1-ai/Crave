@@ -5,27 +5,16 @@
     "eyebrow": "YOUR CRAVELIST",
     "title": "What are we craving?",
     "sub": "One shared list for every spot you and your crew want to try.",
-    "chip": "❤️  41 spots saved",
+    "chip": "❤️  46 spots saved",
     "chipAt": "right",
-    "patches": [
-      {
-        "x": 478,
-        "y": 1672,
-        "w": 130,
-        "h": 40,
-        "text": "Rebecca",
-        "size": 26,
-        "color": "#64748B"
-      }
-    ],
     "chipY": 330,
     "ipad": {
-      "chipY": 1250,
+      "chipY": 420,
       "patches": [
         {
-          "x": 204,
+          "x": 205,
           "y": 70,
-          "w": 30,
+          "w": 26,
           "h": 24,
           "text": "❤️",
           "size": 19,
@@ -33,9 +22,9 @@
           "pad": 2
         },
         {
-          "x": 293,
-          "y": 1004,
-          "w": 75,
+          "x": 294,
+          "y": 1198,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -43,9 +32,9 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1373,
-          "w": 75,
+          "x": 294,
+          "y": 1384,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -53,9 +42,9 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1558,
-          "w": 75,
+          "x": 294,
+          "y": 1570,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -63,9 +52,9 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1742,
-          "w": 75,
+          "x": 294,
+          "y": 1756,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -73,9 +62,39 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1927,
-          "w": 75,
+          "x": 294,
+          "y": 1942,
+          "w": 74,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 1023,
+          "y": 1361,
+          "w": 74,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 1023,
+          "y": 1570,
+          "w": 74,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 1023,
+          "y": 1756,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -96,10 +115,10 @@
     "status": "photo",
     "patches": [
       {
-        "x": 150,
-        "y": 1066,
-        "w": 130,
-        "h": 44,
+        "x": 152,
+        "y": 1036,
+        "w": 128,
+        "h": 40,
         "text": "Rebecca",
         "size": 30.8,
         "color": "#334155"
