@@ -1,0 +1,65 @@
+# Publish a live update whenever a web change lands on main, so merging is shipping.
+# Nothing to do for merges that only touch docs, the site or the iOS project. A merge that
+# changes ios/ or capacitor.config.ts is a native change: it ships with the next App Store
+# build instead, unless the commit message says [ota]. See docs/LIVE_UPDATES.md.
+#
+# Secrets (GitHub → Settings → Secrets and variables → Actions): SUPABASE_SERVICE_ROLE_KEY
+# (the "ota_publish" key), VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_MAPBOX_TOKEN.
+name: Live update
+
+on:
+  push:
+    branches: [main]
+
+# One publish at a time, in order.
+concurrency:
+  group: live-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write # to commit the version bump
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # The version-bump commit this workflow makes must not start another publish.
+    if: "!startsWith(github.event.head_commit.message, 'Live update ')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Does this merge change the web app?
+        id: decide
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          changed=$(git diff --name-only HEAD^ HEAD)
+          echo "$changed"
+          web=$(echo "$changed" | grep -E '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config\.ts$|tsconfig)' | grep -v '^src/config/version\.ts$' || true)
+          native=$(echo "$changed" | grep -E '^(ios/|capacitor\.config\.ts$)' || true)
+          if [ -z "$web" ]; then
+            echo "No web change; nothing to publish."
+          elif [ -n "$native" ] && [[ "$MESSAGE" != *"[ota]"* ]]; then
+            echo "Native change too; it ships with the next App Store build (add [ota] to the merge message to publish anyway)."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          printf 'subject=%s\n' "$(printf '%s' "$MESSAGE" | head -n 1 | cut -c1-200)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.decide.outputs.publish == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.decide.outputs.publish == 'true'
+      - name: Build, upload and record the release
+        if: steps.decide.outputs.publish == 'true'
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_MAPBOX_TOKEN: ${{ secrets.VITE_MAPBOX_TOKEN }}
+          NOTES: ${{ steps.decide.outputs.subject }}
+        run: node scripts/deploy-ota.mjs --ci --notes "$NOTES"

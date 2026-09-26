@@ -1,8 +1,12 @@
-// Publish a live update: npm run ota -- 1.4.5 [--notes "Fix the Spin button"] [--dry-run]
+// Publish a live update: npm run ota [-- 1.5.0] [--notes "Fix the Spin button"] [--dry-run]
+//
+// Normally GitHub runs this itself when a web change lands on main
+// (.github/workflows/live-update.yml). Run it by hand only when that didn't happen.
 //
 // One command, no git steps: it publishes exactly what's on GitHub's main.
 // 1. Checks your Mac matches GitHub's main exactly (Xcode's own edits under ios/ are ignored).
-// 2. Sets WEB_VERSION in src/config/version.ts and builds the app.
+// 2. Picks the next version (1.4.5 → 1.4.6, unless you give one), sets WEB_VERSION in
+//    src/config/version.ts and builds the app.
 // 3. Zips dist/, uploads it to the public `app-releases` bucket and adds a row to
 //    `app_updates` (min_build = MIN_NATIVE_BUILD from src/config/version.ts).
 // 4. Commits and pushes the version bump to main.
@@ -11,6 +15,8 @@
 //
 // Needs SUPABASE_SERVICE_ROLE_KEY (the "ota_publish" secret key) in .env.local.
 // --skip-git-check publishes whatever is on disk (emergencies only).
+// --ci is what the GitHub workflow passes: main is already checked out, so no git check,
+//      and the version bump is committed as the github-actions bot.
 import { createClient } from "@supabase/supabase-js";
 import archiver from "archiver";
 import { execSync } from "node:child_process";
@@ -24,9 +30,10 @@ for (const file of [".env.local", ".env"]) {
 }
 
 const args = process.argv.slice(2);
-const version = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--notes");
+const requested = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--notes");
 const dryRun = args.includes("--dry-run");
 const skipGitCheck = args.includes("--skip-git-check");
+const ci = args.includes("--ci");
 const notesAt = args.indexOf("--notes");
 const notes = notesAt >= 0 ? args[notesAt + 1] : null;
 
@@ -73,9 +80,11 @@ function gitProblem() {
   return null;
 }
 
-if (!version || !/^\d+(\.\d+){1,3}$/.test(version)) fail("Give a version: npm run ota -- 1.4.5");
+if (requested && !/^\d+(\.\d+){1,3}$/.test(requested)) fail(`"${requested}" doesn't look like a version. Example: npm run ota -- 1.5.0`);
 
-if (!skipGitCheck) {
+if (ci) {
+  // The workflow checked out the commit that just landed on main.
+} else if (!skipGitCheck) {
   const problem = gitProblem();
   if (problem && !dryRun) fail(problem);
   if (problem) console.warn(`⚠ ${problem}`);
@@ -86,6 +95,8 @@ if (!skipGitCheck) {
 const current = source.match(/WEB_VERSION = "([^"]+)"/)?.[1];
 const minBuild = Number(source.match(/MIN_NATIVE_BUILD = (\d+)/)?.[1]);
 if (!current || !minBuild) fail("Couldn't read WEB_VERSION / MIN_NATIVE_BUILD from src/config/version.ts");
+// No version given: the next patch release (1.4.5 → 1.4.6).
+const version = requested ?? current.replace(/\d+$/, (n) => String(Number(n) + 1));
 if (compare(version, current) <= 0) fail(`${version} must be higher than the current version (${current}). Apps only move forward.`);
 
 const url = process.env.VITE_SUPABASE_URL;
@@ -147,12 +158,16 @@ console.log(`\n✓ ${version} is live. Apps on build ${minBuild}+ pick it up the
 
 // Save the new version on GitHub, so main (and the next App Store build) match what's live.
 try {
+  if (ci) {
+    git('config user.name "github-actions[bot]"');
+    git('config user.email "41898282+github-actions[bot]@users.noreply.github.com"');
+  }
   git(`commit -m "Live update ${version}" -- src/config/version.ts`);
   try {
-    git("push origin main");
+    git("push origin HEAD:main");
   } catch {
     git("pull --no-rebase --no-edit origin main"); // someone merged meanwhile
-    git("push origin main");
+    git("push origin HEAD:main");
   }
   console.log(`📝 Saved WEB_VERSION = "${version}" to GitHub (main).\n`);
 } catch (err) {

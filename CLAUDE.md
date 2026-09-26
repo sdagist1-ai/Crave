@@ -24,18 +24,22 @@ React + Capacitor iOS app (`ios/`), marketing site (`site/`), Supabase backend.
 
 ## Shipping changes: live update or App Store build?
 
+Every PR is checked on GitHub (lint, types, build: `.github/workflows/check.yml`). Wait for
+the green check before merging; `npm run check` runs the same thing locally.
+
 **Web-only change** (screens, styles, app logic, anything under `src/`, `index.html`, CSS):
-ship it as a **live update**, no App Store review. After the PR is merged, the user runs on
-their Mac, from main:
+ships as a **live update**, no App Store review. **Merging to main publishes it**: the
+"Live update" workflow (`.github/workflows/live-update.yml`) builds, uploads, bumps
+`WEB_VERSION` (next patch, e.g. 1.4.5 → 1.4.6) and commits that bump to main as the
+github-actions bot. The user does nothing on their Mac. A merge that also touches `ios/` or
+`capacitor.config.ts` is treated as native and not published (add `[ota]` to the merge
+message to publish anyway). After merging, tell the user which version to expect and
+check the workflow run succeeded.
 
-```
-git pull --no-edit && npm install
-npm run ota -- <next version>     # e.g. 1.4.5, then 1.4.6 …
-```
-
-The script refuses to publish unless the Mac matches GitHub's main (so what ships is what
-was reviewed), and afterwards commits and pushes the `WEB_VERSION` bump itself. Never tell
-the user to commit `version.ts` by hand.
+Manual fallback (only if the workflow failed): on the Mac, from main,
+`git pull --no-edit && npm install && npm run ota` (add `-- 1.5.0` for a specific version).
+The script refuses to publish unless the Mac matches GitHub's main, and commits the version
+bump itself. Never tell the user to commit `version.ts` by hand.
 
 Phones on build `MIN_NATIVE_BUILD`+ download it on the next open and switch to it the next
 time the app is backgrounded (so it shows after closing/reopening the app twice). Settings
@@ -49,10 +53,10 @@ build**:
    entries, app + CraveShare) in the PR. Never edit the build number in Xcode by hand.
 2. If the web code now depends on that native change, set `MIN_NATIVE_BUILD` in
    `src/config/version.ts` to the new build, so older installs don't get it by live update.
-3. User on their Mac: `git checkout -- ios/App/App.xcodeproj` (discard Xcode's local edits,
-   which otherwise block the pull), `git pull`, `npm install`, `npm run build`,
-   `npx cap sync ios`, `npx cap open ios`, check App + CraveShare show the new build under
-   General, then Product → Archive and upload. Submit that build for review.
+3. User on their Mac, from main: `npm run ios`. It discards Xcode's local project-file
+   edits (which otherwise block the pull), pulls, installs, builds, syncs, prints the
+   version and build, and opens Xcode. Then: check App + CraveShare show the new build under
+   General, Product → Archive, upload, and submit that build for review.
 
 Build numbers only go up across versions (a version holds many builds; each upload needs a
 new, higher number). Current: App Store build **10** (1.4); the latest live update is `WEB_VERSION` in
