@@ -103,10 +103,11 @@ pushes the version bump to main, so the next App Store build starts from that ve
 `--dry-run` builds and zips without uploading.
 
 **Normally you never run this.** `.github/workflows/live-update.yml` runs it with `--ci` on
-every push to main that changes the web app (`src/`, `public/`, `index.html`, packages,
-Vite/TS config; not `src/config/version.ts` alone). Merges that touch `ios/` or
-`capacitor.config.ts` are skipped, since they may need the native side; put `[ota]` in the
-merge message to publish those anyway. Runs are serialized, and the bot's version-bump
+every push to main that changes the web app (`src/`, `public/`, `index.html`,
+`package-lock.json`, Vite/TS config; not `src/config/version.ts` alone). Merges that touch
+`ios/` or `capacitor.config.ts` are skipped, since they may need the native side; put
+`[ota]` in the merge message to publish those anyway, or `[skip ota]` to hold a web change
+back. Runs are serialized, and the bot's version-bump
 commit never starts another run.
 
 - **Pull a bad update:** set `is_active = false` on its row in `app_updates`. Phones that

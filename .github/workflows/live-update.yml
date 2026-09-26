@@ -36,9 +36,12 @@ jobs:
         run: |
           changed=$(git diff --name-only HEAD^ HEAD)
           echo "$changed"
-          web=$(echo "$changed" | grep -E '^(src/|public/|index\.html$|package(-lock)?\.json$|vite\.config\.ts$|tsconfig)' | grep -v '^src/config/version\.ts$' || true)
+          # package-lock.json changes with the dependencies; package.json alone is just scripts.
+          web=$(echo "$changed" | grep -E '^(src/|public/|index\.html$|package-lock\.json$|vite\.config\.ts$|tsconfig)' | grep -v '^src/config/version\.ts$' || true)
           native=$(echo "$changed" | grep -E '^(ios/|capacitor\.config\.ts$)' || true)
-          if [ -z "$web" ]; then
+          if [[ "$MESSAGE" == *"[skip ota]"* ]]; then
+            echo "Skipped: the merge message says [skip ota]."
+          elif [ -z "$web" ]; then
             echo "No web change; nothing to publish."
           elif [ -n "$native" ] && [[ "$MESSAGE" != *"[ota]"* ]]; then
             echo "Native change too; it ships with the next App Store build (add [ota] to the merge message to publish anyway)."
