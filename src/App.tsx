@@ -216,8 +216,9 @@ function CraveApp({ uid }: { uid: string }) {
     };
     // Something changed: refetch what's on screen.
     const invalidate = (...keys: string[]) => schedule(keys, false);
-    // Back on screen: refetch only what's been sitting for a while. Realtime covers
-    // the rest, and a quick hop to another app and back costs nothing.
+    // Back on screen: refetch only what's more than RESUME_STALE_MS old. Newer data is
+    // kept up to date by realtime events (or by the rejoin refetch below if the
+    // connection dropped meanwhile).
     const invalidateStale = (...keys: string[]) => schedule(keys, true);
     // Realtime can't filter deletes (they only carry the row id) and sends every
     // one, so only refetch when the deleted place is one we're showing.
@@ -246,8 +247,10 @@ function CraveApp({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => invalidate("groups", "restaurants"))
       .subscribe((status) => {
         // Rejoined after the connection dropped: fetch whatever changed in between.
+        // Rejoined after the connection dropped: events from the gap are gone for good,
+        // so this one refetches whatever the age of the data.
         if (status !== "SUBSCRIBED") return;
-        if (subscribedBefore) invalidateStale("restaurants", "groups");
+        if (subscribedBefore) invalidate("restaurants", "groups");
         subscribedBefore = true;
       });
 
@@ -430,12 +433,15 @@ const persister = createSyncStoragePersister({
   storage: window.localStorage,
 });
 
-// What survives a relaunch: the lists and the list tab's pages (with their facets).
-// Whole-list copies, Spin pools, search results and open details are fetched fresh;
-// saving them too would rewrite a growing blob on every change.
-const PERSISTED = new Set(["feed", "facets"]);
+// What survives a relaunch: the lists, and each list's default view of the list tab
+// (its first pages, and the facets). Filtered views, whole-list copies, Spin pools,
+// search results and open details are fetched fresh; saving them too would rewrite a
+// growing blob on every change.
+const DEFAULT_VIEW = JSON.stringify([DEFAULT_FEED.tab, DEFAULT_FEED.cuisines, DEFAULT_FEED.occasion, DEFAULT_FEED.vibes, DEFAULT_FEED.sort]);
 const shouldPersist = (key: readonly unknown[]) =>
-  key[0] === "groups" || key[0] === "profile" || (key[0] === "restaurants" && PERSISTED.has(key[1] as string));
+  key[0] === "groups" || key[0] === "profile"
+  || (key[0] === "restaurants" && key[1] === "facets")
+  || (key[0] === "restaurants" && key[1] === "feed" && JSON.stringify(key.slice(4)) === DEFAULT_VIEW);
 
 // On return to the app, data older than this is refetched (newer data waits for a
 // realtime event or the normal 5-minute stale time).
@@ -460,6 +466,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  const [splashFading, setSplashFading] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(() =>
     window.location.hash.includes("type=recovery") && window.location.hash.includes("access_token="));
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -568,11 +575,14 @@ export default function App() {
         dehydrateOptions: { shouldDehydrateQuery: (q) => defaultShouldDehydrateQuery(q) && shouldPersist(q.queryKey) },
       }}
     >
-      {showSplash && <AnimatedSplash ready={!loading} onComplete={() => setShowSplash(false)} />}
+      {showSplash && (
+        <AnimatedSplash ready={!loading} onFading={() => setSplashFading(true)} onComplete={() => setShowSplash(false)} />
+      )}
       {loading && !showSplash && <AppShellSkeleton />}
 
       {!loading && (
-        <div className={`h-full w-full transition-opacity duration-300 ${showSplash ? "pointer-events-none opacity-0" : "opacity-100"}`}>
+        // Fades in as the splash fades out, so there's no blank frame in between.
+        <div className={`h-full w-full transition-opacity duration-300 ${showSplash && !splashFading ? "pointer-events-none opacity-0" : "opacity-100"}`}>
           <Suspense fallback={<AppShellSkeleton />}>
             {isRecoveryMode ? (
               <UpdatePasswordScreen onComplete={() => {

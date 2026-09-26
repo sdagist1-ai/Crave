@@ -140,10 +140,16 @@ each checks the caller.
 
 ## Performance, when lists get long
 
-Done 2026-09-26 (live update 1.4.6): slim whole-list fetches, refetch on resume only when
-stale, persisted cache limited to what the first screen shows, memoised cards, Google
-re-sync by age only, set-based review policy, one-pass group scores. Next, once lists
-reach a few hundred places:
+Done 2026-09-26 (live update 1.4.6): refetch on resume only when stale, persisted cache
+limited to what the first screen shows, memoised cards, Google re-sync by age, set-based
+review policy, one-pass group scores. `get_group_feed` also gained a `p_slim` option
+(rows without review notes/photos, hours and links) that the app does **not** use yet:
+a slim row reaching the detail page or the rating sheet needs care first (the rating
+sheet seeds its notes and photos from the row). Next, once lists reach a few hundred
+places:
+
+- **Slim rows for Spin and Passport only**, with the detail page always fetching the full
+  row before rating is enabled.
 
 - **Cursor pagination** for `get_group_feed` (keyset on `created_at, id` instead of
   OFFSET), so deep pages stay fast and a place added mid-scroll doesn't shift the pages.

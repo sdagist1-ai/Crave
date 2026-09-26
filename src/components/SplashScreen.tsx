@@ -9,13 +9,19 @@ const MIN_MS = 750;
 const MAX_MS = 2500;
 const FADE_MS = 200;
 
-export function AnimatedSplash({ ready = true, onComplete }: { ready?: boolean; onComplete: () => void }) {
+export function AnimatedSplash({ ready = true, onFading, onComplete }: {
+  ready?: boolean;
+  /** The fade-out has started: a good moment to start showing what's underneath. */
+  onFading?: () => void;
+  onComplete: () => void;
+}) {
   const [eating, setEating] = useState(false);
   const [minElapsed, setMinElapsed] = useState(false);
   const [maxElapsed, setMaxElapsed] = useState(false);
-  // Latest onComplete without restarting the timers when the parent re-renders.
+  // Latest callbacks without restarting the timers when the parent re-renders.
   const complete = useRef(onComplete);
-  useEffect(() => { complete.current = onComplete; }, [onComplete]);
+  const fading = useRef(onFading);
+  useEffect(() => { complete.current = onComplete; fading.current = onFading; }, [onComplete, onFading]);
 
   useEffect(() => {
     const eat = setTimeout(() => setEating(true), EAT_AT_MS);
@@ -28,6 +34,7 @@ export function AnimatedSplash({ ready = true, onComplete }: { ready?: boolean; 
   const phase: "writing" | "eating" | "done" = finish ? "done" : eating ? "eating" : "writing";
   useEffect(() => {
     if (!finish) return;
+    fading.current?.();
     const t = setTimeout(() => complete.current(), FADE_MS);
     return () => clearTimeout(t);
   }, [finish]);
