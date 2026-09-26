@@ -31,8 +31,8 @@ build through review.
 1. **One change, one PR, test first.** Merge only what you've tried (Xcode ▶ Run on your
    phone runs the current code directly; no publish needed to try it).
 2. **Publish from main, right after merging**, so the release matches the repo:
-   `git pull && npm install && npm run ota -- <next version>`, then commit
-   `src/config/version.ts`.
+   `git pull --no-edit && npm install && npm run ota -- <next version>`. That's all: the
+   script saves the new version to GitHub itself.
 3. **Check it landed** on your own phone first (Settings shows the new version after
    reopening the app twice). If something's wrong, set `is_active = false` on its
    `app_updates` row, fix, and publish the next version. Phones that already switched stay on
@@ -92,9 +92,11 @@ Then, from main:
 npm run ota -- 1.4.1 --notes "Fix the Spin button"
 ```
 
-It sets `WEB_VERSION` in `src/config/version.ts`, builds, zips `dist/`, uploads it and adds
-the release. **Commit `src/config/version.ts` afterwards** so the next App Store build starts
-from that version. `--dry-run` builds and zips without uploading.
+It first checks your Mac matches GitHub's main (stops if you're behind, have unpushed
+commits, or have uncommitted changes outside `ios/`). Then it sets `WEB_VERSION` in
+`src/config/version.ts`, builds, zips `dist/`, uploads it, adds the release, and commits and
+pushes the version bump to main, so the next App Store build starts from that version.
+`--dry-run` builds and zips without uploading.
 
 - **Pull a bad update:** set `is_active = false` on its row in `app_updates`. Phones that
   already switched stay on it until the next release; publish a fixed version to move them on.
