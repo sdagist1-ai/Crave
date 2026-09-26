@@ -99,8 +99,8 @@ for (const s of slides) {
   }, slide.chipY);
   // Cover the real status bar with a clean 9:41 one in the screenshot's own background colour.
   // Patches replace text in the screenshot (e.g. a name): each covers a box, in the
-  // screenshot's own pixels, with the colour just inside its top-left corner.
-  await page.evaluate((patches) => {
+  // screenshot's own pixels, with the colour just inside its top-left corner (or blurs it).
+  await page.evaluate(async (patches) => {
     const img = document.getElementById("shot"), c = document.createElement("canvas");
     const W = img.naturalWidth, H = img.naturalHeight, k = img.clientWidth / W;
     c.width = W; c.height = H;
@@ -114,7 +114,23 @@ for (const s of slides) {
         background: at(p.x + 1, p.y + 1), color: p.color, fontSize: `${p.size * k}px`, fontWeight: p.weight ?? 400,
         paddingLeft: `${(p.pad ?? 5) * k}px`,
       });
+      if (p.blur) el.style.background = "transparent";
     });
+    // "blur" patches smudge the screenshot itself instead of painting over it (text on a photo).
+    const blurs = patches.filter((p) => p.blur);
+    if (blurs.length) {
+      for (const p of blurs) {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(p.x, p.y, p.w, p.h); ctx.clip();
+        ctx.fillStyle = at(p.x + p.w / 2, p.y + p.h + 4); // the blur fades out at the edges
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.filter = `blur(${p.blur}px)`;
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      }
+      img.src = c.toDataURL();
+      await img.decode();
+    }
   }, slide.patches ?? []);
   if (phones) {
     // Transparent PNG of the frame only, shrunk and re-encoded as WebP in the page.

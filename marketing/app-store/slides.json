@@ -5,27 +5,16 @@
     "eyebrow": "YOUR CRAVELIST",
     "title": "What are we craving?",
     "sub": "One shared list for every spot you and your crew want to try.",
-    "chip": "❤️  41 spots saved",
+    "chip": "❤️  46 spots saved",
     "chipAt": "right",
-    "patches": [
-      {
-        "x": 478,
-        "y": 1672,
-        "w": 130,
-        "h": 40,
-        "text": "Rebecca",
-        "size": 26,
-        "color": "#64748B"
-      }
-    ],
     "chipY": 330,
     "ipad": {
-      "chipY": 1250,
+      "chipY": 420,
       "patches": [
         {
-          "x": 204,
+          "x": 205,
           "y": 70,
-          "w": 30,
+          "w": 26,
           "h": 24,
           "text": "❤️",
           "size": 19,
@@ -33,9 +22,9 @@
           "pad": 2
         },
         {
-          "x": 293,
-          "y": 1004,
-          "w": 75,
+          "x": 294,
+          "y": 1198,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -43,9 +32,9 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1373,
-          "w": 75,
+          "x": 294,
+          "y": 1384,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -53,9 +42,9 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1558,
-          "w": 75,
+          "x": 294,
+          "y": 1570,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -63,9 +52,9 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1742,
-          "w": 75,
+          "x": 294,
+          "y": 1756,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -73,9 +62,39 @@
           "pad": 3
         },
         {
-          "x": 293,
-          "y": 1927,
-          "w": 75,
+          "x": 294,
+          "y": 1942,
+          "w": 74,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 1023,
+          "y": 1361,
+          "w": 74,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 1023,
+          "y": 1570,
+          "w": 74,
+          "h": 24,
+          "text": "Rebecca",
+          "size": 16,
+          "color": "#64748B",
+          "pad": 3
+        },
+        {
+          "x": 1023,
+          "y": 1756,
+          "w": 74,
           "h": 24,
           "text": "Rebecca",
           "size": 16,
@@ -96,10 +115,10 @@
     "status": "photo",
     "patches": [
       {
-        "x": 150,
-        "y": 1066,
-        "w": 130,
-        "h": 44,
+        "x": 152,
+        "y": 1036,
+        "w": 128,
+        "h": 40,
         "text": "Rebecca",
         "size": 30.8,
         "color": "#334155"
@@ -111,18 +130,28 @@
       "chipY": 290,
       "patches": [
         {
-          "x": 92,
-          "y": 624,
-          "w": 80,
-          "h": 28,
+          "x": 0,
+          "y": 0,
+          "w": 260,
+          "h": 48,
+          "text": "",
+          "size": 1,
+          "color": "#fff",
+          "blur": 40
+        },
+        {
+          "x": 350,
+          "y": 830,
+          "w": 84,
+          "h": 26,
           "text": "Rebecca",
           "size": 18.9,
           "color": "#334155",
           "pad": 3
         },
         {
-          "x": 103,
-          "y": 1113,
+          "x": 362,
+          "y": 1345,
           "w": 90,
           "h": 26,
           "text": "Rebecca",
@@ -160,19 +189,17 @@
     "file": "5_Add_Nearby",
     "screen": "5-add",
     "eyebrow": "ADD IN SECONDS",
-    "title": "Spots near you, first.",
-    "sub": "Search any restaurant, café or bar and save it to your list.",
+    "title": "Save it in seconds.",
+    "sub": "Say what it's good for, add a note, and it's on the list for everyone.",
     "chip": "⚡  Saved in one tap",
     "chipAt": "right",
     "chipY": 640,
     "ipad": {
-      "title": "Save it in seconds.",
-      "sub": "Tag the vibe, add a note, and it's on the list for everyone.",
       "chipY": 700,
       "patches": [
         {
-          "x": 243,
-          "y": 77,
+          "x": 245,
+          "y": 78,
           "w": 28,
           "h": 26,
           "text": "❤️",
@@ -182,7 +209,7 @@
         },
         {
           "x": 810,
-          "y": 1884,
+          "y": 1918,
           "w": 28,
           "h": 28,
           "text": "❤️",
