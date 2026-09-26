@@ -1,30 +1,43 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
-  const [phase, setPhase] = useState<"writing" | "eating" | "done">("writing");
+// Word, bites, gone. It ends as soon as the app behind it is ready (`ready`), but not
+// before the bites have had their moment, and never later than MAX_MS (the app shows
+// its loading skeleton after that). Bites: 5 × 0.25 s, starting 60 ms apart, so the
+// last one lands at EAT_AT_MS + 490 ms, just before the fade.
+const EAT_AT_MS = 250;
+const MIN_MS = 750;
+const MAX_MS = 2500;
+const FADE_MS = 200;
+
+export function AnimatedSplash({ ready = true, onFading, onComplete }: {
+  ready?: boolean;
+  /** The fade-out has started: a good moment to start showing what's underneath. */
+  onFading?: () => void;
+  onComplete: () => void;
+}) {
+  const [eating, setEating] = useState(false);
+  const [minElapsed, setMinElapsed] = useState(false);
+  const [maxElapsed, setMaxElapsed] = useState(false);
+  // Latest callbacks without restarting the timers when the parent re-renders.
+  const complete = useRef(onComplete);
+  const fading = useRef(onFading);
+  useEffect(() => { complete.current = onComplete; fading.current = onFading; }, [onComplete, onFading]);
 
   useEffect(() => {
-    // 1. Snappy 400ms display before eating
-    const eatTimer = setTimeout(() => {
-      setPhase("eating");
-    }, 400);
+    const eat = setTimeout(() => setEating(true), EAT_AT_MS);
+    const min = setTimeout(() => setMinElapsed(true), MIN_MS);
+    const max = setTimeout(() => setMaxElapsed(true), MAX_MS);
+    return () => { clearTimeout(eat); clearTimeout(min); clearTimeout(max); };
+  }, []);
 
-    // 2. Bites complete quickly at 850ms
-    const doneTimer = setTimeout(() => {
-      setPhase("done");
-    }, 850);
-
-    // 3. Complete and unmount at 1050ms
-    const unmountTimer = setTimeout(() => {
-      onComplete();
-    }, 1050);
-
-    return () => {
-      clearTimeout(eatTimer);
-      clearTimeout(doneTimer);
-      clearTimeout(unmountTimer);
-    };
-  }, [onComplete]);
+  const finish = minElapsed && (ready || maxElapsed);
+  const phase: "writing" | "eating" | "done" = finish ? "done" : eating ? "eating" : "writing";
+  useEffect(() => {
+    if (!finish) return;
+    fading.current?.();
+    const t = setTimeout(() => complete.current(), FADE_MS);
+    return () => clearTimeout(t);
+  }, [finish]);
 
   return (
     <div
@@ -57,10 +70,10 @@ export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
         {phase !== "writing" && (
           <>
             <CartoonBite className="w-16 h-16 right-4 top-8" delay="0s" />
-            <CartoonBite className="w-20 h-20 -left-2 top-2" delay="0.08s" />
-            <CartoonBite className="w-[90px] h-[90px] left-1/2 -ml-10 bottom-2" delay="0.16s" />
-            <CartoonBite className="w-40 h-40 left-1/2 -ml-20 top-1/2 -mt-20" delay="0.24s" />
-            <CartoonBite className="w-64 h-64 left-1/2 -ml-32 top-1/2 -mt-32" delay="0.32s" />
+            <CartoonBite className="w-20 h-20 -left-2 top-2" delay="0.06s" />
+            <CartoonBite className="w-[90px] h-[90px] left-1/2 -ml-10 bottom-2" delay="0.12s" />
+            <CartoonBite className="w-40 h-40 left-1/2 -ml-20 top-1/2 -mt-20" delay="0.18s" />
+            <CartoonBite className="w-64 h-64 left-1/2 -ml-32 top-1/2 -mt-32" delay="0.24s" />
           </>
         )}
       </div>

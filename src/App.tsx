@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
-import { QueryClient, focusManager, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { defaultShouldDehydrateQuery, focusManager, QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { ScreenOrientation } from "@capacitor/screen-orientation";
@@ -197,22 +197,36 @@ function CraveApp({ uid }: { uid: string }) {
   // Bursts of events (e.g. a review plus the trigger updating `visited`) are
   // coalesced into one refetch.
   useEffect(() => {
-    const pending = new Set<string>();
+    // key -> true when every request so far was "only if stale"
+    const pending = new Map<string, boolean>();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const invalidate = (...keys: string[]) => {
-      keys.forEach((k) => pending.add(k));
+    const schedule = (keys: string[], staleOnly: boolean) => {
+      keys.forEach((k) => pending.set(k, staleOnly && (pending.get(k) ?? true)));
       clearTimeout(timer);
       timer = setTimeout(() => {
-        pending.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+        pending.forEach((onlyStale, k) => onlyStale
+          // Leave anything already refetching alone (the focus refetch may have started it).
+          ? queryClient.invalidateQueries({
+            queryKey: [k],
+            predicate: (q) => q.state.fetchStatus !== "fetching" && Date.now() - q.state.dataUpdatedAt > RESUME_STALE_MS,
+          }, { cancelRefetch: false })
+          : queryClient.invalidateQueries({ queryKey: [k] }));
         pending.clear();
       }, 400);
     };
+    // Something changed: refetch what's on screen.
+    const invalidate = (...keys: string[]) => schedule(keys, false);
+    // Back on screen: refetch only what's more than RESUME_STALE_MS old. Newer data is
+    // kept up to date by realtime events (or by the rejoin refetch below if the
+    // connection dropped meanwhile).
+    const invalidateStale = (...keys: string[]) => schedule(keys, true);
     // Realtime can't filter deletes (they only carry the row id) and sends every
     // one, so only refetch when the deleted place is one we're showing.
     const onRestaurantDeleted = (id: unknown) => {
-      if (typeof id !== "string") return;
-      const cached = JSON.stringify(queryClient.getQueriesData({ queryKey: ["restaurants"] }));
-      if (cached.includes(id)) invalidate("restaurants", "groups");
+      if (typeof id !== "number") return;
+      const shown = queryClient.getQueriesData({ queryKey: ["restaurants"] })
+        .some(([, data]) => holdsRestaurant(data, id));
+      if (shown) invalidate("restaurants", "groups");
     };
 
     let subscribedBefore = false;
@@ -233,6 +247,8 @@ function CraveApp({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => invalidate("groups", "restaurants"))
       .subscribe((status) => {
         // Rejoined after the connection dropped: fetch whatever changed in between.
+        // Rejoined after the connection dropped: events from the gap are gone for good,
+        // so this one refetches whatever the age of the data.
         if (status !== "SUBSCRIBED") return;
         if (subscribedBefore) invalidate("restaurants", "groups");
         subscribedBefore = true;
@@ -240,12 +256,12 @@ function CraveApp({ uid }: { uid: string }) {
 
     // iOS suspends the app in the background (e.g. while saving from Maps with the
     // share sheet), so events are missed and the 5-minute cache would keep showing
-    // the old list. Refetch whenever Crave comes back on screen.
+    // the old list. Refetch what's gone stale whenever Crave comes back on screen.
     const resumed = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) invalidate("restaurants", "groups");
+      if (isActive) invalidateStale("restaurants", "groups");
     });
     const onVisible = () => {
-      if (document.visibilityState === "visible") invalidate("restaurants", "groups");
+      if (document.visibilityState === "visible") invalidateStale("restaurants", "groups");
     };
     document.addEventListener("visibilitychange", onVisible);
 
@@ -417,6 +433,29 @@ const persister = createSyncStoragePersister({
   storage: window.localStorage,
 });
 
+// What survives a relaunch: the lists, and each list's default view of the list tab
+// (its first pages, and the facets). Filtered views, whole-list copies, Spin pools,
+// search results and open details are fetched fresh; saving them too would rewrite a
+// growing blob on every change.
+const DEFAULT_VIEW = JSON.stringify([DEFAULT_FEED.tab, DEFAULT_FEED.cuisines, DEFAULT_FEED.occasion, DEFAULT_FEED.vibes, DEFAULT_FEED.sort]);
+const shouldPersist = (key: readonly unknown[]) =>
+  key[0] === "groups" || key[0] === "profile"
+  || (key[0] === "restaurants" && key[1] === "facets")
+  || (key[0] === "restaurants" && key[1] === "feed" && JSON.stringify(key.slice(4)) === DEFAULT_VIEW);
+
+// On return to the app, data older than this is refetched (newer data waits for a
+// realtime event or the normal 5-minute stale time).
+const RESUME_STALE_MS = 30_000;
+
+/** Whether a cached restaurants query (a page list, a whole list or a detail) holds this place. */
+function holdsRestaurant(data: unknown, id: number): boolean {
+  if (!data || typeof data !== "object") return false;
+  if (Array.isArray(data)) return data.some((r) => (r as Restaurant | undefined)?.id === id);
+  const d = data as { id?: unknown; pages?: { restaurants?: Restaurant[] }[] };
+  if (d.id === id) return true;
+  return !!d.pages?.some((p) => p.restaurants?.some((r) => r.id === id));
+}
+
 // Bump when cached data shapes change so a new build never renders an old cache.
 const CACHE_VERSION = "2026-09-cuisines";
 
@@ -427,6 +466,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
+  const [splashFading, setSplashFading] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(() =>
     window.location.hash.includes("type=recovery") && window.location.hash.includes("access_token="));
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -526,11 +566,23 @@ export default function App() {
   }, []);
 
   return (
-    <PersistQueryClientProvider client={appQueryClient} persistOptions={{ persister, buster: CACHE_VERSION, maxAge: 1000 * 60 * 60 * 24 }}>
-      {showSplash && <AnimatedSplash onComplete={() => setShowSplash(false)} />}
+    <PersistQueryClientProvider
+      client={appQueryClient}
+      persistOptions={{
+        persister,
+        buster: CACHE_VERSION,
+        maxAge: 1000 * 60 * 60 * 24,
+        dehydrateOptions: { shouldDehydrateQuery: (q) => defaultShouldDehydrateQuery(q) && shouldPersist(q.queryKey) },
+      }}
+    >
+      {showSplash && (
+        <AnimatedSplash ready={!loading} onFading={() => setSplashFading(true)} onComplete={() => setShowSplash(false)} />
+      )}
+      {loading && !showSplash && <AppShellSkeleton />}
 
       {!loading && (
-        <div className={`h-full w-full transition-opacity duration-300 ${showSplash ? "pointer-events-none opacity-0" : "opacity-100"}`}>
+        // Fades in as the splash fades out, so there's no blank frame in between.
+        <div className={`h-full w-full transition-opacity duration-300 ${showSplash && !splashFading ? "pointer-events-none opacity-0" : "opacity-100"}`}>
           <Suspense fallback={<AppShellSkeleton />}>
             {isRecoveryMode ? (
               <UpdatePasswordScreen onComplete={() => {

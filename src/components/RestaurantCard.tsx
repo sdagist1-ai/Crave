@@ -1,16 +1,20 @@
+import { memo } from "react";
 import { Star, UtensilsCrossed } from "lucide-react";
 import type { Restaurant } from "../types";
 import { formatPriceLevel, placeSubtitle } from "../utils/helpers";
 import { Avatar, AvatarStack, ScoreCircle, OccasionTag, Tag } from "./ui";
 import { displayName } from "../utils/people";
 
-export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
+// Memoised: a list re-renders whenever anything on screen changes (a sheet opening,
+// a page landing), and each card's work is the same unless its place changed.
+export const RestaurantCard = memo(function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
   restaurant: Restaurant;
   memberCount: number;
   onOpen: (r: Restaurant) => void;
 }) {
   const raters = r.reviews.filter((rev) => rev.score != null);
   const price = formatPriceLevel(r.priceLevel);
+  const subtitle = placeSubtitle(r);
   // Google's rating is a hint for places nobody here has scored yet; once the
   // crew has scored it, their score (the circle) is what matters.
   const showGoogle = r.avgScore == null && r.rating != null;
@@ -29,12 +33,12 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
 
       <span className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="truncate text-[17px] font-semibold leading-tight text-ink">{r.name}</span>
-        {(placeSubtitle(r) || showGoogle) && (
+        {(subtitle || showGoogle) && (
           <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
-            {placeSubtitle(r) && <span className="truncate">{placeSubtitle(r)}</span>}
+            {subtitle && <span className="truncate">{subtitle}</span>}
             {showGoogle && (
               <span className="inline-flex shrink-0 items-center gap-0.5" aria-label={`Google rating ${r.rating!.toFixed(1)}`}>
-                {placeSubtitle(r) && <span aria-hidden="true">·</span>}
+                {subtitle && <span aria-hidden="true">·</span>}
                 <Star size={11} className="fill-[#f59e0b] text-[#f59e0b]" aria-hidden="true" />
                 <span className="tabular">{r.rating!.toFixed(1)}</span>
               </span>
@@ -69,7 +73,7 @@ export function RestaurantCard({ restaurant: r, memberCount, onOpen }: {
       <ScoreCircle avgScore={r.avgScore} />
     </button>
   );
-}
+});
 
 export function RestaurantCardSkeleton() {
   return (
