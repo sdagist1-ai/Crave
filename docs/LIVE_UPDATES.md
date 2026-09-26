@@ -26,6 +26,18 @@ build through review.
   version that worked.
 - The plugin checks each download against its sha256.
 
+## Which changes can go live without review?
+
+| Change | How it ships |
+|---|---|
+| Screens, styles, copy, app logic (`src/`, CSS, `index.html`) | Live update: `npm run ota -- <version>` |
+| Database / Edge Functions (`supabase/`) | Applied directly; no app release needed |
+| Swift, share sheet (CraveShare), Info.plist, entitlements, app icon/splash | New App Store build |
+| Adding or updating a Capacitor plugin (package.json native deps) | New App Store build (+ bump `MIN_NATIVE_BUILD` if web code uses it) |
+
+Apple allows live updates of the web code as long as they don't change what the app is
+for; new native capabilities always go through review.
+
 ## Publishing an update
 
 One-time setup: put the service role key in `.env.local` (never commit it):
