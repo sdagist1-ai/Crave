@@ -87,10 +87,18 @@ generic AI recommendations.
 
 1. **Cap the Google Places bill.** Any signed-in account can call the `places` function as
    often as it likes, so a scripted abuser could run up Places charges.
-   - Now, no code: a daily quota cap on the Places API and a budget alert in Google Cloud.
-   - Then: a per-user rate limit in the `places` function.
+   - Done: per-minute quota caps (30) on SearchText, GetPlace and GetPhotoMedia, and a
+     $25/month budget alert.
+   - Still to do: a per-user daily limit in the `places` function.
 2. **Review photos are public links** (random names, but anyone with a link can open
    them). Switch to signed URLs if that becomes a concern.
+3. **Sign live-update bundles (next App Store build).** Capgo encryption/signing: private
+   key on the Mac, public key in `capacitor.config.ts`; phones reject unsigned bundles even
+   if Supabase is compromised. Update `scripts/deploy-ota.mjs` to sign. See
+   docs/LIVE_UPDATES.md → Security.
+4. ~~**Dedicated publishing key**~~ Done: secret key "ota_publish" (Supabase → API keys),
+   used in `.env.local`; revoke it there if the Mac or the file is ever exposed.
+5. **Lock the Google Places key** to Places API (New) only (Google Cloud → Credentials).
 
 The advisor's "SECURITY DEFINER function executable" warnings (create_group,
 delete_user_account, guess_place_cuisine, join_group, reset_share_code) are intended:
