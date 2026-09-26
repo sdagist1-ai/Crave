@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 
 // Word, bites, gone. It ends as soon as the app behind it is ready (`ready`), but not
-// before the bites have had their moment, and never later than MAX_MS.
-const EAT_AT_MS = 300;
-const MIN_MS = 650;
+// before the bites have had their moment, and never later than MAX_MS (the app shows
+// its loading skeleton after that). Bites: 5 × 0.25 s, starting 60 ms apart, so the
+// last one lands at EAT_AT_MS + 490 ms, just before the fade.
+const EAT_AT_MS = 250;
+const MIN_MS = 750;
 const MAX_MS = 2500;
 const FADE_MS = 200;
 
@@ -61,10 +63,10 @@ export function AnimatedSplash({ ready = true, onComplete }: { ready?: boolean; 
         {phase !== "writing" && (
           <>
             <CartoonBite className="w-16 h-16 right-4 top-8" delay="0s" />
-            <CartoonBite className="w-20 h-20 -left-2 top-2" delay="0.08s" />
-            <CartoonBite className="w-[90px] h-[90px] left-1/2 -ml-10 bottom-2" delay="0.16s" />
-            <CartoonBite className="w-40 h-40 left-1/2 -ml-20 top-1/2 -mt-20" delay="0.24s" />
-            <CartoonBite className="w-64 h-64 left-1/2 -ml-32 top-1/2 -mt-32" delay="0.32s" />
+            <CartoonBite className="w-20 h-20 -left-2 top-2" delay="0.06s" />
+            <CartoonBite className="w-[90px] h-[90px] left-1/2 -ml-10 bottom-2" delay="0.12s" />
+            <CartoonBite className="w-40 h-40 left-1/2 -ml-20 top-1/2 -mt-20" delay="0.18s" />
+            <CartoonBite className="w-64 h-64 left-1/2 -ml-32 top-1/2 -mt-32" delay="0.24s" />
           </>
         )}
       </div>

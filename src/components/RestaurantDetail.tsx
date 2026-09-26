@@ -48,11 +48,11 @@ export function RestaurantDetail({ restaurant: r, group, myUid, onRate, onRemove
   };
 
   // Refresh hours/photo/location from Google when never synced or older than 30 days.
-  // Not when hours are merely missing: Google has none for some places, and asking on
-  // every open is a paid call each time.
+  // A place still missing hours (Google has none, or the save-time lookup failed) is
+  // retried at most once a day, not on every open: each check is a paid call.
   useEffect(() => {
     const age = r.lastSyncedAt ? (Date.now() - new Date(r.lastSyncedAt).getTime()) / 86_400_000 : Infinity;
-    if (age >= SYNC_AFTER_DAYS) {
+    if (age >= SYNC_AFTER_DAYS || (!r.openingHours && age >= 1)) {
       syncRestaurantData(r.placeId, r.id, !!r.photoUrl).then((ok) => {
         if (ok) queryClient.invalidateQueries({ queryKey: ["restaurants"] });
       });

@@ -204,10 +204,13 @@ function CraveApp({ uid }: { uid: string }) {
       keys.forEach((k) => pending.set(k, staleOnly && (pending.get(k) ?? true)));
       clearTimeout(timer);
       timer = setTimeout(() => {
-        pending.forEach((onlyStale, k) => queryClient.invalidateQueries({
-          queryKey: [k],
-          ...(onlyStale ? { predicate: (q) => Date.now() - q.state.dataUpdatedAt > RESUME_STALE_MS } : {}),
-        }));
+        pending.forEach((onlyStale, k) => onlyStale
+          // Leave anything already refetching alone (the focus refetch may have started it).
+          ? queryClient.invalidateQueries({
+            queryKey: [k],
+            predicate: (q) => q.state.fetchStatus !== "fetching" && Date.now() - q.state.dataUpdatedAt > RESUME_STALE_MS,
+          }, { cancelRefetch: false })
+          : queryClient.invalidateQueries({ queryKey: [k] }));
         pending.clear();
       }, 400);
     };
@@ -293,7 +296,6 @@ function CraveApp({ uid }: { uid: string }) {
 
   // The open detail page reads its own row, so it reflects new ratings wherever
   // it was opened from.
-  type RestaurantPages = { pages: { restaurants: Restaurant[] }[] };
   const detailQuery = useQuery({
     queryKey: ["restaurants", "detail", uid, detail?.groupId, detail?.id],
     queryFn: async () => {
@@ -301,19 +303,10 @@ function CraveApp({ uid }: { uid: string }) {
       return restaurants[0] ?? null;
     },
     enabled: !!detail,
-    // Opened from Spin, Passport or a filter preview, `detail` is a slim row (no hours,
-    // notes or review photos). Show the full row the list already has, if any, while
-    // this one loads.
-    placeholderData: () => {
-      for (const [, data] of queryClient.getQueriesData<RestaurantPages>({ queryKey: ["restaurants", "feed"] })) {
-        const full = data?.pages?.flatMap((p) => p.restaurants).find((r) => r.id === detail!.id);
-        if (full) return full;
-      }
-      return undefined;
-    },
   });
   const liveDetail = detail ? (detailQuery.data?.id === detail.id ? detailQuery.data : detail) : null;
 
+  type RestaurantPages = { pages: { restaurants: Restaurant[] }[] };
   const removeMutation = useMutation({
     mutationFn: async (id: number) => {
       const { error } = await supabase.from("restaurants").delete().eq("id", id);
@@ -576,6 +569,7 @@ export default function App() {
       }}
     >
       {showSplash && <AnimatedSplash ready={!loading} onComplete={() => setShowSplash(false)} />}
+      {loading && !showSplash && <AppShellSkeleton />}
 
       {!loading && (
         <div className={`h-full w-full transition-opacity duration-300 ${showSplash ? "pointer-events-none opacity-0" : "opacity-100"}`}>

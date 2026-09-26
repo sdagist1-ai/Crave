@@ -111,11 +111,7 @@ export type FetchRestaurantsOptions = {
   sortBy?: SortOption;
   search?: string;
   restaurantId?: number;
-  /**
-   * Fetch the whole list (up to 1000) in one page, e.g. for the map. Rows come back
-   * slim: what a card shows, without review notes/photos, hours, notes and links
-   * (those are null). Opening a place fetches its full row.
-   */
+  /** Fetch the whole list (up to 1000) in one page, e.g. for the map. */
   all?: boolean;
 };
 
@@ -139,7 +135,6 @@ export async function fetchRestaurants({
     p_search: search?.trim() || undefined,
     p_cuisines: filterCuisines?.length ? filterCuisines : undefined,
     p_occasion: filterOccasion ?? undefined,
-    p_slim: all || undefined,
   });
   if (error) throw error;
 
@@ -168,7 +163,7 @@ export function feedQuery(uid: string, groupId: string | undefined, filters: {
 /** What the list tab shows first. */
 export const DEFAULT_FEED: Parameters<typeof feedQuery>[2] = { tab: "cravelist", cuisines: [], occasion: null, vibes: [], sort: "newest" };
 
-/** Every place on a list in one call, slim (Passport, Spin, and instant filter previews). */
+/** Every place on a list in one call (Passport, Spin, and instant filter previews). */
 export function wholeListQuery(uid: string, groupId: string | undefined) {
   return queryOptions({
     queryKey: ["restaurants", "whole", uid, groupId],

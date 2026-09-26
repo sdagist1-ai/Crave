@@ -334,6 +334,7 @@ export type Database = {
           p_vibes?: string[]
           p_cuisines?: string[]
           p_occasion?: string
+          p_slim?: boolean
         }
         Returns: Json[]
       }
