@@ -58,8 +58,9 @@ The remaining risk is **the publishing key**: whoever holds `SUPABASE_SERVICE_RO
 publish code that runs on every phone. So:
 - Keep it only in `.env.local` on your Mac (ignored by git). Don't keep the project folder in
   iCloud Drive / Desktop & Documents sync or Dropbox, which would upload the file.
-- Prefer a **dedicated secret key for publishing** (Supabase → API keys → create a secret key
-  named "ota-publish") so it can be revoked on its own without touching the app's other keys.
+- Publishing uses a **dedicated secret key, "ota_publish"** (Supabase → API keys), set as
+  `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. If it's ever exposed, revoke that key there
+  and create a new one; nothing else in the app uses it.
 - **Next App Store build: sign bundles.** Capgo supports end-to-end encryption/signing: a
   private key stays on your Mac, the public key ships in the app (`publicKey` in
   `capacitor.config.ts`), and phones reject any bundle not signed with it, even if someone

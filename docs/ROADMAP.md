@@ -96,8 +96,8 @@ generic AI recommendations.
    key on the Mac, public key in `capacitor.config.ts`; phones reject unsigned bundles even
    if Supabase is compromised. Update `scripts/deploy-ota.mjs` to sign. See
    docs/LIVE_UPDATES.md → Security.
-4. **Dedicated publishing key** ("ota-publish" secret key) instead of the main service role
-   key in `.env.local`, so it can be revoked on its own.
+4. ~~**Dedicated publishing key**~~ Done: secret key "ota_publish" (Supabase → API keys),
+   used in `.env.local`; revoke it there if the Mac or the file is ever exposed.
 5. **Lock the Google Places key** to Places API (New) only (Google Cloud → Credentials).
 
 The advisor's "SECURITY DEFINER function executable" warnings (create_group,
