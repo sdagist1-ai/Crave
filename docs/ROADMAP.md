@@ -138,6 +138,20 @@ each checks the caller.
     picks", no logo, no implied affiliation (or ask them about a partnership).
 - **Ask for an App Store rating at a happy moment** (after rating a place 9+).
 
+## Performance, when lists get long
+
+Done 2026-09-26 (live update 1.4.6): slim whole-list fetches, refetch on resume only when
+stale, persisted cache limited to what the first screen shows, memoised cards, Google
+re-sync by age only, set-based review policy, one-pass group scores. Next, once lists
+reach a few hundred places:
+
+- **Cursor pagination** for `get_group_feed` (keyset on `created_at, id` instead of
+  OFFSET), so deep pages stay fast and a place added mid-scroll doesn't shift the pages.
+- **Virtualise the list** (only render cards near the viewport) and **cluster map
+  markers** (PassportMap renders one DOM marker per place today).
+- **Narrow realtime**: reviews/profiles/members events invalidate everything; scope them
+  to the open list once there are many lists per user.
+
 ## Smaller ideas
 
 - **Cafés, bakeries and bars under "Needs a cuisine".** Leave places whose occasions are

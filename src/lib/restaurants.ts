@@ -111,7 +111,11 @@ export type FetchRestaurantsOptions = {
   sortBy?: SortOption;
   search?: string;
   restaurantId?: number;
-  /** Fetch the whole list (up to 1000) in one page, e.g. for the map. */
+  /**
+   * Fetch the whole list (up to 1000) in one page, e.g. for the map. Rows come back
+   * slim: what a card shows, without review notes/photos, hours, notes and links
+   * (those are null). Opening a place fetches its full row.
+   */
   all?: boolean;
 };
 
@@ -135,6 +139,7 @@ export async function fetchRestaurants({
     p_search: search?.trim() || undefined,
     p_cuisines: filterCuisines?.length ? filterCuisines : undefined,
     p_occasion: filterOccasion ?? undefined,
+    p_slim: all || undefined,
   });
   if (error) throw error;
 
@@ -163,7 +168,7 @@ export function feedQuery(uid: string, groupId: string | undefined, filters: {
 /** What the list tab shows first. */
 export const DEFAULT_FEED: Parameters<typeof feedQuery>[2] = { tab: "cravelist", cuisines: [], occasion: null, vibes: [], sort: "newest" };
 
-/** Every place on a list in one call (Passport, and instant filter previews). */
+/** Every place on a list in one call, slim (Passport, Spin, and instant filter previews). */
 export function wholeListQuery(uid: string, groupId: string | undefined) {
   return queryOptions({
     queryKey: ["restaurants", "whole", uid, groupId],
@@ -199,13 +204,15 @@ export function filterLocally(places: Restaurant[], f: {
       default: return null;
     }
   };
-  return out.sort((a, b) => {
-    const ka = key(a), kb = key(b);
-    if (ka !== kb) {
-      if (ka == null) return 1;
-      if (kb == null) return -1;
-      return kb - ka;
+  // Keys once per place, not once per comparison.
+  const keyed = out.map((r) => ({ r, k: key(r), created: time(r.createdAt) ?? 0 }));
+  keyed.sort((a, b) => {
+    if (a.k !== b.k) {
+      if (a.k == null) return 1;
+      if (b.k == null) return -1;
+      return b.k - a.k;
     }
-    return (time(b.createdAt) ?? 0) - (time(a.createdAt) ?? 0) || b.id - a.id;
+    return b.created - a.created || b.r.id - a.r.id;
   });
+  return keyed.map((x) => x.r);
 }

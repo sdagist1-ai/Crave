@@ -1,30 +1,34 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-export function AnimatedSplash({ onComplete }: { onComplete: () => void }) {
-  const [phase, setPhase] = useState<"writing" | "eating" | "done">("writing");
+// Word, bites, gone. It ends as soon as the app behind it is ready (`ready`), but not
+// before the bites have had their moment, and never later than MAX_MS.
+const EAT_AT_MS = 300;
+const MIN_MS = 650;
+const MAX_MS = 2500;
+const FADE_MS = 200;
+
+export function AnimatedSplash({ ready = true, onComplete }: { ready?: boolean; onComplete: () => void }) {
+  const [eating, setEating] = useState(false);
+  const [minElapsed, setMinElapsed] = useState(false);
+  const [maxElapsed, setMaxElapsed] = useState(false);
+  // Latest onComplete without restarting the timers when the parent re-renders.
+  const complete = useRef(onComplete);
+  useEffect(() => { complete.current = onComplete; }, [onComplete]);
 
   useEffect(() => {
-    // 1. Snappy 400ms display before eating
-    const eatTimer = setTimeout(() => {
-      setPhase("eating");
-    }, 400);
+    const eat = setTimeout(() => setEating(true), EAT_AT_MS);
+    const min = setTimeout(() => setMinElapsed(true), MIN_MS);
+    const max = setTimeout(() => setMaxElapsed(true), MAX_MS);
+    return () => { clearTimeout(eat); clearTimeout(min); clearTimeout(max); };
+  }, []);
 
-    // 2. Bites complete quickly at 850ms
-    const doneTimer = setTimeout(() => {
-      setPhase("done");
-    }, 850);
-
-    // 3. Complete and unmount at 1050ms
-    const unmountTimer = setTimeout(() => {
-      onComplete();
-    }, 1050);
-
-    return () => {
-      clearTimeout(eatTimer);
-      clearTimeout(doneTimer);
-      clearTimeout(unmountTimer);
-    };
-  }, [onComplete]);
+  const finish = minElapsed && (ready || maxElapsed);
+  const phase: "writing" | "eating" | "done" = finish ? "done" : eating ? "eating" : "writing";
+  useEffect(() => {
+    if (!finish) return;
+    const t = setTimeout(() => complete.current(), FADE_MS);
+    return () => clearTimeout(t);
+  }, [finish]);
 
   return (
     <div

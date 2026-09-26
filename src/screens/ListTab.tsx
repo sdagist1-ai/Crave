@@ -58,7 +58,8 @@ export function ListTab({ uid, group, groups, onSelectGroup, onAdd, onOpen, acti
     // Hidden tabs keep their data but don't refetch; they catch up when shown.
     subscribed: active,
   });
-  const restaurants = feed.data?.pages.flatMap((p) => p.restaurants) ?? [];
+  const feedData = feed.data;
+  const restaurants = useMemo(() => feedData?.pages.flatMap((p) => p.restaurants) ?? [], [feedData]);
   if (!wantWhole && feed.data && !feed.isPlaceholderData) setWantWhole(true);
   const facets = useQuery({ ...facetsQuery(group?.id), subscribed: active }).data;
 
