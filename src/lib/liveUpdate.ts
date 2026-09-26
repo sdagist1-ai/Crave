@@ -17,7 +17,8 @@ import { WEB_VERSION } from "../config/version";
 //   (see reportCrashAndRollBack, used by the error boundary).
 // - A new App Store build starts from its own code (resetWhenUpdate).
 //
-// Publishing: `npm run ota -- 1.4.1` (scripts/deploy-ota.mjs). See docs/LIVE_UPDATES.md.
+// Publishing: merging a web change to main publishes it (.github/workflows/live-update.yml);
+// `npm run ota` is the manual fallback. See docs/LIVE_UPDATES.md.
 
 const BLACKLIST_KEY = "crave_ota_blacklist";
 
