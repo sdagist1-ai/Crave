@@ -49,4 +49,6 @@ If Xcode says "Unable to find module dependency" after a plugin change: quit Xco
 `rm -rf ~/Library/Developer/Xcode/DerivedData/App-*`, reopen, File → Packages → Reset
 Package Caches, then Resolve Package Versions, then Product → Clean Build Folder.
 
-Details and history (why builds 7 and 8 can't live-update): docs/LIVE_UPDATES.md.
+Details, working practice, security notes and history (why builds 7 and 8 can't
+live-update): docs/LIVE_UPDATES.md. Next App Store build should add bundle signing
+(docs/ROADMAP.md → Security (next)).

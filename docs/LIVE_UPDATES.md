@@ -26,6 +26,45 @@ build through review.
   version that worked.
 - The plugin checks each download against its sha256.
 
+## How to work with it
+
+1. **One change, one PR, test first.** Merge only what you've tried (Xcode ▶ Run on your
+   phone runs the current code directly; no publish needed to try it).
+2. **Publish from main, right after merging**, so the release matches the repo:
+   `git pull && npm install && npm run ota -- <next version>`, then commit
+   `src/config/version.ts`.
+3. **Check it landed** on your own phone first (Settings shows the new version after
+   reopening the app twice). If something's wrong, set `is_active = false` on its
+   `app_updates` row, fix, and publish the next version. Phones that already switched stay on
+   the bad one until a newer release arrives, so fix forward quickly.
+4. **Watch `ota_crash_logs`** for a day after a release (screen crashes and failed checks).
+5. **Batch native changes** into occasional App Store builds; everything else goes live.
+   When an App Store build ships, it carries the latest web code, so publish nothing older.
+
+## Security
+
+What's in place:
+- Only the service role can upload bundles (`app-releases`: no user storage policy covers it;
+  zips only, 50 MB max) or add releases (`app_updates`: users can only read).
+- `zip_url` must point at this project's `app-releases` bucket (check constraint), and the
+  plugin verifies each download's sha256 against the release row.
+- Bundles hold no secrets: only `VITE_` values (public Supabase URL and anon key, public
+  Mapbox token) end up in them. The service role key is read only by `scripts/deploy-ota.mjs`.
+- Capgo's cloud is never contacted (auto-update and stats off).
+- `ota_crash_logs`: signed-in users can insert (length-capped), nobody but the service role
+  can read.
+
+The remaining risk is **the publishing key**: whoever holds `SUPABASE_SERVICE_ROLE_KEY` could
+publish code that runs on every phone. So:
+- Keep it only in `.env.local` on your Mac (ignored by git). Don't keep the project folder in
+  iCloud Drive / Desktop & Documents sync or Dropbox, which would upload the file.
+- Prefer a **dedicated secret key for publishing** (Supabase → API keys → create a secret key
+  named "ota-publish") so it can be revoked on its own without touching the app's other keys.
+- **Next App Store build: sign bundles.** Capgo supports end-to-end encryption/signing: a
+  private key stays on your Mac, the public key ships in the app (`publicKey` in
+  `capacitor.config.ts`), and phones reject any bundle not signed with it, even if someone
+  gets write access to Supabase. Needs a native build because the public key is baked in.
+
 ## Which changes can go live without review?
 
 | Change | How it ships |
