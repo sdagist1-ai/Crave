@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "check": "npm run lint && npm run build",
     "preview": "vite preview",
-    "ota": "node scripts/deploy-ota.mjs"
+    "ota": "node scripts/deploy-ota.mjs",
+    "ios": "node scripts/ios.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

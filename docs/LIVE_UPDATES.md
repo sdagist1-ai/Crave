@@ -30,9 +30,9 @@ build through review.
 
 1. **One change, one PR, test first.** Merge only what you've tried (Xcode ▶ Run on your
    phone runs the current code directly; no publish needed to try it).
-2. **Publish from main, right after merging**, so the release matches the repo:
-   `git pull --no-edit && npm install && npm run ota -- <next version>`. That's all: the
-   script saves the new version to GitHub itself.
+2. **Merging is publishing.** When a web change lands on main, GitHub builds it, uploads
+   it and records the release (the "Live update" workflow), then commits the version bump.
+   Watch the run under the repo's Actions tab; it takes about two minutes.
 3. **Check it landed** on your own phone first (Settings shows the new version after
    reopening the app twice). If something's wrong, set `is_active = false` on its
    `app_updates` row, fix, and publish the next version. Phones that already switched stay on
@@ -56,11 +56,27 @@ What's in place:
 
 The remaining risk is **the publishing key**: whoever holds `SUPABASE_SERVICE_ROLE_KEY` could
 publish code that runs on every phone. So:
-- Keep it only in `.env.local` on your Mac (ignored by git). Don't keep the project folder in
-  iCloud Drive / Desktop & Documents sync or Dropbox, which would upload the file.
+- It lives in two places: `.env.local` on your Mac (ignored by git; don't keep the project
+  folder in iCloud Drive / Desktop & Documents sync or Dropbox, which would upload the
+  file) and GitHub's **encrypted Actions secrets** for the auto-publish workflow. GitHub
+  secrets can't be read back, even by you, and only workflows in this repo see them, so
+  anyone who could publish through GitHub could already merge code to main.
 - Publishing uses a **dedicated secret key, "ota_publish"** (Supabase → API keys), set as
-  `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. If it's ever exposed, revoke that key there
-  and create a new one; nothing else in the app uses it.
+  `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and in GitHub. If it's ever exposed, revoke
+  that key there and create a new one; nothing else in the app uses it.
+- **The GitHub copy, honestly.** Accepted risk, decided 2026-09-26.
+  - What protects it: encrypted before it leaves the browser, can't be read back (only
+    replaced), blanked out in logs, never given to pull requests from forks. The workflow
+    uses only GitHub's own `actions/checkout` and `actions/setup-node`, no third-party
+    actions, so nothing else runs with the secret in reach.
+  - What doesn't: anyone who can push code to this repo could add a workflow step that
+    leaks it, and whoever gets into the GitHub account gets everything. So: keep the repo
+    private, keep two-factor on the GitHub account (authenticator app or passkey, not SMS),
+    and think again before adding a collaborator.
+  - Blast radius: it's a Supabase secret key, so it can read and write the whole database,
+    not only publish. A leak means a compromised app on every phone *and* exposed user data,
+    until bundle signing lands (below). If in doubt, rotate: Supabase → API Keys → delete
+    `ota_publish`, create a new one, update `.env.local` and the GitHub secret. Two minutes.
 - **Next App Store build: sign bundles.** Capgo supports end-to-end encryption/signing: a
   private key stays on your Mac, the public key ships in the app (`publicKey` in
   `capacitor.config.ts`), and phones reject any bundle not signed with it, even if someone
@@ -89,7 +105,8 @@ SUPABASE_SERVICE_ROLE_KEY=...   # Supabase → Project Settings → API keys
 Then, from main:
 
 ```
-npm run ota -- 1.4.1 --notes "Fix the Spin button"
+npm run ota                                   # next patch version, e.g. 1.4.5 → 1.4.6
+npm run ota -- 1.5.0 --notes "Spin rewrite"   # a specific version
 ```
 
 It first checks your Mac matches GitHub's main (stops if you're behind, have unpushed
@@ -97,6 +114,14 @@ commits, or have uncommitted changes outside `ios/`). Then it sets `WEB_VERSION`
 `src/config/version.ts`, builds, zips `dist/`, uploads it, adds the release, and commits and
 pushes the version bump to main, so the next App Store build starts from that version.
 `--dry-run` builds and zips without uploading.
+
+**Normally you never run this.** `.github/workflows/live-update.yml` runs it with `--ci` on
+every push to main that changes the web app (`src/`, `public/`, `index.html`,
+`package-lock.json`, Vite/TS config; not `src/config/version.ts` alone). Merges that touch
+`ios/` or `capacitor.config.ts` are skipped, since they may need the native side; put
+`[ota]` in the merge message to publish those anyway, or `[skip ota]` to hold a web change
+back. Runs are serialized, and the bot's version-bump
+commit never starts another run.
 
 - **Pull a bad update:** set `is_active = false` on its row in `app_updates`. Phones that
   already switched stay on it until the next release; publish a fixed version to move them on.
