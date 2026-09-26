@@ -111,18 +111,28 @@
       "chipY": 290,
       "patches": [
         {
-          "x": 92,
-          "y": 624,
-          "w": 80,
-          "h": 28,
+          "x": 0,
+          "y": 0,
+          "w": 260,
+          "h": 48,
+          "text": "",
+          "size": 1,
+          "color": "#fff",
+          "blur": 40
+        },
+        {
+          "x": 350,
+          "y": 830,
+          "w": 84,
+          "h": 26,
           "text": "Rebecca",
           "size": 18.9,
           "color": "#334155",
           "pad": 3
         },
         {
-          "x": 103,
-          "y": 1113,
+          "x": 362,
+          "y": 1345,
           "w": 90,
           "h": 26,
           "text": "Rebecca",
@@ -160,19 +170,17 @@
     "file": "5_Add_Nearby",
     "screen": "5-add",
     "eyebrow": "ADD IN SECONDS",
-    "title": "Spots near you, first.",
-    "sub": "Search any restaurant, café or bar and save it to your list.",
+    "title": "Save it in seconds.",
+    "sub": "Say what it's good for, add a note, and it's on the list for everyone.",
     "chip": "⚡  Saved in one tap",
     "chipAt": "right",
     "chipY": 640,
     "ipad": {
-      "title": "Save it in seconds.",
-      "sub": "Say what it's good for, add a note, and it's on the list for everyone.",
       "chipY": 700,
       "patches": [
         {
-          "x": 243,
-          "y": 77,
+          "x": 245,
+          "y": 78,
           "w": 28,
           "h": 26,
           "text": "❤️",
@@ -182,7 +190,7 @@
         },
         {
           "x": 810,
-          "y": 1884,
+          "y": 1918,
           "w": 28,
           "h": 28,
           "text": "❤️",
