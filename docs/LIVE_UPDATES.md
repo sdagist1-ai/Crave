@@ -62,8 +62,21 @@ publish code that runs on every phone. So:
   secrets can't be read back, even by you, and only workflows in this repo see them, so
   anyone who could publish through GitHub could already merge code to main.
 - Publishing uses a **dedicated secret key, "ota_publish"** (Supabase → API keys), set as
-  `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. If it's ever exposed, revoke that key there
-  and create a new one; nothing else in the app uses it.
+  `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and in GitHub. If it's ever exposed, revoke
+  that key there and create a new one; nothing else in the app uses it.
+- **The GitHub copy, honestly.** Accepted risk, decided 2026-09-26.
+  - What protects it: encrypted before it leaves the browser, can't be read back (only
+    replaced), blanked out in logs, never given to pull requests from forks. The workflow
+    uses only GitHub's own `actions/checkout` and `actions/setup-node`, no third-party
+    actions, so nothing else runs with the secret in reach.
+  - What doesn't: anyone who can push code to this repo could add a workflow step that
+    leaks it, and whoever gets into the GitHub account gets everything. So: keep the repo
+    private, keep two-factor on the GitHub account (authenticator app or passkey, not SMS),
+    and think again before adding a collaborator.
+  - Blast radius: it's a Supabase secret key, so it can read and write the whole database,
+    not only publish. A leak means a compromised app on every phone *and* exposed user data,
+    until bundle signing lands (below). If in doubt, rotate: Supabase → API Keys → delete
+    `ota_publish`, create a new one, update `.env.local` and the GitHub secret. Two minutes.
 - **Next App Store build: sign bundles.** Capgo supports end-to-end encryption/signing: a
   private key stays on your Mac, the public key ships in the app (`publicKey` in
   `capacitor.config.ts`), and phones reject any bundle not signed with it, even if someone
